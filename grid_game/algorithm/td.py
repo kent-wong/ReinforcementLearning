@@ -25,12 +25,16 @@ class TD():
 		# use callback to get value of state/action from user of this class
 		predict = self.value_func(state, action)
 		target = self.value_func(state_next, action_next)
-		target *= self.gamma*self.eligibility
+		target *= self.gamma
 		target += reward
 
 		# calculate the 'Temporal Difference' between two states
 		delta = target - predict
 		delta *= self.alpha
+
+		# wk_debug
+		if state_next == 66:
+			print("!!!! target is {}, predict is {}, delta is {}".format(target, predict, delta))
 
 		# if TD(0), won't bother to record eligibility
 		if self.eligibility == 0:

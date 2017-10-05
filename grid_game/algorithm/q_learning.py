@@ -68,8 +68,21 @@ class QLearning():
 		#print("update_callback(): state: {}, action: {}, delta: {}".format(state, action, delta))
 		self.qtable[state][action] += delta
 
+	def action_values(self, state):
+		return self.qtable[state]
+
+	def dump(self):
+		for state, record in self.qtable.items():
+			print(str(state)+"\t", end='')
+			for value in record:
+				print(str(float(value)) + '  ', end='')
+			print("")
+
 	def next_action(self, state):
 		return self.action_selection_func(self.qtable[state])
+
+	def best_action(self, state):
+		return np.argmax(self.qtable[state])
 
 	def episode_start(self, state):
 		if self.qtable.get(state) == None:

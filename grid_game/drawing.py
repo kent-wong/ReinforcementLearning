@@ -118,6 +118,9 @@ class DrawingManager(threading.Thread):
 		x0, y0, x1, y1 = self.coord_from_index(index)
 		self.agent_canvas_id = self.drawing_helper.draw_pacman(x0, y0, x1, y1, rotate_angle)
 		
+	def remove_agent(self):
+		self.canvas.delete(self.agent_canvas_id)
+
 	def rotate_agent(self, index, rotate_to):
 		x0, y0, x1, y1 = self.coord_from_index(index)
 

@@ -31,7 +31,8 @@ class Env():
 			self.grid.all_blocks().append(block)
 
 			text = '0' + '\n(' + str(default_rewards) + ')'
-			self.drawing_manager.draw_block(self.grid.index_from_blockid(i), None, text)
+			#self.drawing_manager.draw_block(self.grid.index_from_blockid(i), None, text)
+			self.drawing_manager.draw_block(self.grid.index_from_blockid(i), None, None)
 
 		# store agent location
 		self.agent_location = agent_location
@@ -48,6 +49,10 @@ class Env():
 	def get_block(self, index):
 		return self.grid.block_from_index(index)
 		
+	def show_text(self, blockid, text):
+		index = self.grid.index_from_blockid(blockid)
+		self.drawing_manager.draw_block(index, None, text)
+		
 	def set_block(self, index, reward, value, is_terminal):
 		block = self.grid.block_from_index(index)
 		block.reward = reward
@@ -61,7 +66,8 @@ class Env():
 		elif reward > 0:
 			shape = DrawingManager.DRAWING_SHAPE_YELLOW_STAR
 
-		self.drawing_manager.draw_block(index, shape, text)
+		#self.drawing_manager.draw_block(index, shape, text)
+		self.drawing_manager.draw_block(index, shape, None)
 
 	# setup the layout of environment
 	# you can experiment algorithms by changing this 'layout'
@@ -82,12 +88,13 @@ class Env():
 
 		return angle
 
-	def reset(self, agent_location, orientation):
-		self.agent_location = agent_location
-		self.agent_orientation = orientation
+	def reset(self):
+		self.agent_location = (0, 0)
+		self.agent_orientation = Env.E
 
-		angle = self.angle_from_orientation(orientation)
-		self.drawing_manager.draw_agent(agent_location, angle)
+		self.drawing_manager.remove_agent()
+		angle = self.angle_from_orientation(self.agent_orientation)
+		self.drawing_manager.draw_agent(self.agent_location, angle)
 		
 	def step(self, action):
 		index = self.agent_location
@@ -132,6 +139,11 @@ class Env():
 		is_terminal = block_next.is_terminal
 
 		return (state, action, reward, state_next, is_terminal)
+
+	def walk_by_orders(self, action_list):
+		self.reset()
+		for action in action_list:
+			self.step(action)
 
 
 if __name__ == '__main__':
