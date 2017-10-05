@@ -6,13 +6,13 @@ class DrawingHelperFunc():
 	def __init__(self, canvas):
 		self.canvas = canvas
 		
-	def draw_block_rect(self, x0, y0, x1, y1):
+	def draw_block_rect(self, x0, y0, x1, y1, ratio=1):
 		return self.canvas.create_rectangle(x0, y0, x1, y1)
 
-	def draw_red_solid_circle(self, x0, y0, x1, y1):
+	def draw_red_solid_circle(self, x0, y0, x1, y1, ratio=1):
 		return self.canvas.create_oval(x0, y0, x1, y1, fill='red')
 	 
-	def draw_yellow_star(self, l, t, r, b):
+	def draw_yellow_star(self, l, t, r, b, ratio=1):
 		x0 = l
 		y0 = t + (b - t)*2/5
 		x1 = r
@@ -26,8 +26,20 @@ class DrawingHelperFunc():
 
 		return self.canvas.create_polygon(x0, y0, x1, y1, x2, y2, x3, y3, x4, y4, fill='yellow')
 	
-	def draw_pacman(self, x0, y0, x1, y1):
-		return self.canvas.create_arc(x0, y0, x1, y1, start=35, extent=290, fill='blue')
+	def draw_trace(self, x0, y0, x1, y1, angle=0, ratio=1):
+		centerx = (x0 + x1) / 2
+		centery = (y0 + y1) / 2
+
+		start = 35 + angle
+		extent = 290
+		canvas_id = self.canvas.create_arc(x0, y0, x1, y1, start=start, extent=extent, fill='#f0fff8')
+		self.canvas.scale(canvas_id, centerx, centery, ratio, ratio)
+		return canvas_id
+
+	def draw_pacman(self, x0, y0, x1, y1, rotate_angle=0, ratio=1):
+		start = 35 + rotate_angle
+		extent = 290
+		return self.canvas.create_arc(x0, y0, x1, y1, start=start, extent=extent, fill='blue')
 
 	def draw_text(self, x0, y0, x1, y1, text):
 		if text == None:
@@ -35,10 +47,10 @@ class DrawingHelperFunc():
 
 		x = (x0 + x1) / 2
 		y = (y0 + y1) / 2
-		return self.canvas.create_text(x, y, text=text, font=('Times', 16))
+		return self.canvas.create_text(x, y, text=text, font=('Times', 16), justify=tk.CENTER)
 		
 	def get_shape_func(self, shape):
-		func_list = [self.draw_block_rect, self.draw_red_solid_circle, self.draw_yellow_star, self.draw_pacman]
+		func_list = [self.draw_block_rect, self.draw_red_solid_circle, self.draw_yellow_star, self.draw_trace]
 		return func_list[shape]
 
 
@@ -48,7 +60,7 @@ class DrawingManager(threading.Thread):
 	DRAWING_SHAPE_EMPTY = 0
 	DRAWING_SHAPE_RED_CIRCLE = 1
 	DRAWING_SHAPE_YELLOW_STAR = 2
-	DRAWING_SHAPE_PACMAN = 3
+	DRAWING_SHAPE_TRACE = 3
 
 	class DrawingInfo():
 		def __init__(self, shape, text):
@@ -95,10 +107,24 @@ class DrawingManager(threading.Thread):
 			self.canvas.delete(draw_info.text_canvas_id)
 			draw_info.text_canvas_id = self.drawing_helper.draw_text(x0, y0, x1, y1, text)
 
-	def draw_agent(self, index):
+	def draw_trace(self, index, angle=0, ratio=1):
 		x0, y0, x1, y1 = self.coord_from_index(index)
-		self.agent_canvas_id = self.drawing_helper.draw_pacman(x0, y0, x1, y1)
+		draw_info = self.grid.block_from_index(index)
+
+		if draw_info.shape_canvas_id == None:
+			draw_info.shape_canvas_id = self.drawing_helper.draw_trace(x0, y0, x1, y1, angle, ratio)
 		
+	def draw_agent(self, index, rotate_angle=0):
+		x0, y0, x1, y1 = self.coord_from_index(index)
+		self.agent_canvas_id = self.drawing_helper.draw_pacman(x0, y0, x1, y1, rotate_angle)
+		
+	def rotate_agent(self, index, rotate_to):
+		x0, y0, x1, y1 = self.coord_from_index(index)
+
+		# tkinter doesn't support rotate a canvas element, so we delete then draw again
+		self.canvas.delete(self.agent_canvas_id)
+		self.agent_canvas_id = self.drawing_helper.draw_pacman(x0, y0, x1, y1, rotate_to)
+
 	def move_agent(self, index, index_new):
 		x0, y0, x1, y1 = self.coord_from_index(index)
 		xx0, yy0, xx1, yy1 = self.coord_from_index(index_new)
@@ -106,7 +132,7 @@ class DrawingManager(threading.Thread):
 		move_x = xx0 - x0
 		move_y = yy0 - y0
 		self.canvas.move(self.agent_canvas_id, move_x, move_y)
-		print("agent_canvas_id:{}, index:{}".format(self.agent_canvas_id, index_new))
+		#print("agent_canvas_id:{}, index:{}".format(self.agent_canvas_id, index_new))
 		#self.canvas.move(self.agent_canvas_id, 30, 30)
 
 	def run(self):
