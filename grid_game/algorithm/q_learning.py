@@ -90,7 +90,7 @@ class QLearning():
 		self.td0.episode_start(state)
 		return self.next_action(state)
 
-	def step(self, state, action, reward, state_next):
+	def step(self, state, action, reward, state_next, stepped_into_terminal=False):
 		if self.qtable.get(state_next) == None:
 			self.qtable[state_next] = [0] * self.n_actions
 		self.td0.step(state, action, reward, state_next, None)
@@ -99,7 +99,7 @@ class QLearning():
 	def episode_end(self):
 		self.td0.episode_end()
 
-	def set_terminal(self, state, value):
+	def set_state_value(self, state, value):
 		self.qtable[state] = [value] * self.n_actions
 		
 	def whole_episode(self, one_episode_record):

@@ -1,28 +1,43 @@
-"""A class representing grid in the environment"""
+"""A class representing the underlying grid structure in the environment"""
 class Grid():
 	def __init__(self, dimension):
 		self.dimension = dimension
-		self.block_count = dimension[0] * dimension[1]
-		self.block_list = []
+		self.n_cells = dimension[0] * dimension[1]  # just for convenience
+		self.cell_list = []
 
-	def all_blocks(self):
-		return self.block_list
+	def all_cells(self):
+		return self.cell_list
 		
 	def foreach(self, func):
-		for i, block in enumerate(self.block_list):
-			func(i, block)
+		for i, cell in enumerate(self.cell_list):
+			func(i, cell)
 
-	def index_from_blockid(self, blockid):
-		index_x = blockid // self.dimension[1]
-		index_y = blockid % self.dimension[1]
-		return (index_x, index_y)
+	def cell(self, id_or_index):
+		cell_id = id_or_index
+		if isinstance(id_or_index, (list, tuple)) == True:
+			cell_id = cell_id_from_index(id_or_index, self.dimension)	
 
-	def blockid_from_index(self, index):
-		return (index[0] * self.dimension[1]) + index[1]
+		return self.cell_list[cell_id]
 
-	def block_from_id(self, blockid):
-		return self.block_list[blockid]
+	def cell_index_from_id(self, cell_id):
+		width = self.grid_dimension[0]
+		x = cell_id // width
+		y = cell_id % width
+		return (x, y)
 
-	def block_from_index(self, index):
-		blockid = self.blockid_from_index(index)
-		return self.block_list[blockid]
+	def cell_id_from_index(self, index):
+		return index[0] * self.grid_dimension[0] + index[1]
+
+	def insure_id(self, index_or_id):
+		cell_id = index_or_id
+		if isinstance(index_or_id, (list, tuple)) == True:
+			cell_id = self.cell_id_from_index(index_or_id)
+
+		return cell_id
+
+	def insure_index(self, index_or_id):
+		cell_index = index_or_id
+		if isinstance(index_or_id, int) == True:
+			cell_index = self.cell_index_from_id(index_or_id)
+
+		return cell_index

@@ -17,6 +17,8 @@ hyper_n_episodes = 100
 
 env = Env((param_grid_size, param_grid_size), param_agent_loc, (param_block_size, param_block_size), param_default_reward)
 env.set_block((6, 6), param_default_reward, 100, True)
+env.set_block((6, 5), param_default_reward, -100, True)
+#env.set_block((6, 8), 100, 0, False)
 #env.set_block((8, 8), 10,  0, False)
 #env.set_block((6, 7), 10,  0, False)
 
@@ -49,6 +51,7 @@ for episode in range(hyper_n_episodes):
 env.reset()
 q.dump()
 
+# 这是训练之后的演示部分，我们每次都选择value最大的action来指导agent行动
 while True:
 	env.reset()
 	is_terminal = False
@@ -56,7 +59,7 @@ while True:
 	action = q.best_action(state)
 
 	while is_terminal == False:
-		time.sleep(0.3)
+		time.sleep(0.2)  # add some delay between actions, so we can observe it more clearly
 		print("state: {}, state_next: {}, action: {}".format(state, state_next, action))
 		state, action, reward, state_next, is_terminal = env.step(action)
 		action = q.best_action(state_next)
