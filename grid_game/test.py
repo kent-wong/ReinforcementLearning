@@ -1,9 +1,10 @@
+import numpy as np
+import time
 import sys
+
 sys.path.append('./algorithm')
 from q_learning import QLearning
 from grid_env import Env
-import numpy as np
-import time
 
 # parameters
 param_grid_size = 10
@@ -23,11 +24,6 @@ env.set_block((6, 5), param_default_reward, -100, True)
 #env.set_block((6, 7), 10,  0, False)
 
 q = QLearning(param_alpha, param_gamma, param_epsilon, Env.N_ACTIONS)
-terms = env.get_terminals()
-print(terms)
-for state, value in terms:
-	q.set_terminal(state, value)
-
 for episode in range(hyper_n_episodes):
 	env.reset()
 	is_terminal = False

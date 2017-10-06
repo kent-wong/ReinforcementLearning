@@ -1,15 +1,16 @@
-from td import TD
 import numpy as np
 
-class QLearning():
+from td import TD
+from alg_plugin import AlgPlugin
+
+class QLearning(AlgPlugin):
 	class StateRecord():
 		def __init__(self, reward, action_values):
 			self.reward = reward
 			self.action_values = action_values
 
-	def __init__(self, alpha, gamma, epsilon, n_actions):
-		self.n_actions = n_actions
-		self.qtable = {}
+	def __init__(self, alpha, gamma, epsilon):
+		super().__init__()
 
 		# this Q-leaning class is actually TD(0) and off-policy
 		self.td0 = TD(alpha, gamma, 0, self.value_callback, self.update_callback)
@@ -48,15 +49,6 @@ class QLearning():
 
 		self.action_selection_func = epsilon_greedy
 
-	#def initialize(self, state, reward, action_values=None, is_terminal=False):
-	#	if action_values == None:
-	#		action_values = [0] * self.n_actions
-	#	if is_terminal == True:
-	#		action_values = [reward] * self.n_actions
-	#		
-	#	record = QLearning.StateRecord(reward, action_values)
-	#	self.qtable[state] = record
-		
 	def value_callback(self, state, action):
 		#print("value_callback(): state: {}, action: {}".format(state, action))
 		if action == None:
@@ -65,32 +57,30 @@ class QLearning():
 			return self.qtable[state][action]
 
 	def update_callback(self, state, action, delta):
-		#print("update_callback(): state: {}, action: {}, delta: {}".format(state, action, delta))
+		print("update_callback(): state: {}, action: {}, delta: {}".format(state, action, delta))
 		self.qtable[state][action] += delta
 
-	def action_values(self, state):
-		return self.qtable[state]
+	####################################################
+	#                                                  #
+	#    Below is the implementation of EnvPlugin      #
+	#                                                  #
+	####################################################
+	def layout(self, n_states, n_actions, preset_states_list):
+		self.n_state = n_states
+		self.n_actions = n_actions
+		self.qtable = {}
 
-	def dump(self):
-		for state, record in self.qtable.items():
-			print(str(state)+"\t", end='')
-			for value in record:
-				print(str(float(value)) + '  ', end='')
-			print("")
+		for (state, value, is_terminal) in preset_states_list:
+			self.qtable[state] = [value] * self.n_actions
 
-	def next_action(self, state):
-		return self.action_selection_func(self.qtable[state])
-
-	def best_action(self, state):
-		return np.argmax(self.qtable[state])
-
-	def episode_start(self, state):
+	def episode_start(self, episode, state):
+		super().episode_start(episode, state)
 		if self.qtable.get(state) == None:
 			self.qtable[state] = [0] * self.n_actions
 		self.td0.episode_start(state)
 		return self.next_action(state)
 
-	def step(self, state, action, reward, state_next, stepped_into_terminal=False):
+	def one_step(self, state, action, reward, state_next, is_terminal):
 		if self.qtable.get(state_next) == None:
 			self.qtable[state_next] = [0] * self.n_actions
 		self.td0.step(state, action, reward, state_next, None)
@@ -99,8 +89,34 @@ class QLearning():
 	def episode_end(self):
 		self.td0.episode_end()
 
-	def set_state_value(self, state, value):
-		self.qtable[state] = [value] * self.n_actions
+	def next_action(self, state):
+		return self.action_selection_func(self.qtable[state])
+
+	def best_action(self, state):
+		return np.argmax(self.qtable[state])
+
+	def get_text_to_display(self, state):
+		action_values = self.qtable.get(state)
+		if action_values == None:
+			return None
+
+		max_value = np.max(self.qtable[state])
+		max_value = round(max_value, 2)
+		text = str(max_value)
+		return text
+
+	def action_values(self, state):
+		return self.qtable.get(state)
+
+	def dump(self):
+		for state, record in self.qtable.items():
+			print(str(state)+"\t", end='')
+			for value in record:
+				print(str(float(value)) + '  ', end='')
+			print("")
+
+	#def set_state_value(self, state, value):
+	#	self.qtable[state] = [value] * self.n_actions
 		
 	def whole_episode(self, one_episode_record):
 		self.episode_start(one_episode_record[0][0])
@@ -111,7 +127,4 @@ class QLearning():
 
 
 if __name__ == '__main__':
-	qlearning = QLearning(0.1, 0.99, 0.9, 4)
-	for i in range(20):
-		next_action = qlearning.episode_start(i)
-		print("next action: ", next_action)
+	qlearning = QLearning(0.1, 0.99, 0.9)

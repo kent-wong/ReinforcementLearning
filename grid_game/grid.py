@@ -12,21 +12,28 @@ class Grid():
 		for i, cell in enumerate(self.cell_list):
 			func(i, cell)
 
-	def cell(self, id_or_index):
-		cell_id = id_or_index
-		if isinstance(id_or_index, (list, tuple)) == True:
-			cell_id = cell_id_from_index(id_or_index, self.dimension)	
+	def cell(self, index_or_id):
+		cell_id = index_or_id
+		if isinstance(index_or_id, (list, tuple)) == True:
+			cell_id = self.cell_id_from_index(index_or_id)	
 
 		return self.cell_list[cell_id]
 
+	def set_cell(self, index_or_id, new_cell):
+		cell_id = index_or_id
+		if isinstance(index_or_id, (list, tuple)) == True:
+			cell_id = self.cell_id_from_index(index_or_id)	
+
+		self.cell_list[cell_id] = new_cell
+
 	def cell_index_from_id(self, cell_id):
-		width = self.grid_dimension[0]
+		width = self.dimension[0]
 		x = cell_id // width
 		y = cell_id % width
 		return (x, y)
 
 	def cell_id_from_index(self, index):
-		return index[0] * self.grid_dimension[0] + index[1]
+		return index[0] * self.dimension[0] + index[1]
 
 	def insure_id(self, index_or_id):
 		cell_id = index_or_id

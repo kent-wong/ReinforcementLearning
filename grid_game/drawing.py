@@ -1,7 +1,7 @@
 import tkinter as tk
 import threading
+
 from grid import Grid
-import env_utils as utils
 
 def draw_cell_bbox(canvas, bbox):
 	return canvas.create_rectangle(*bbox)
@@ -27,10 +27,18 @@ def draw_yellow_star(canvas, bbox):
 
 	return canvas.create_polygon(x0, y0, x1, y1, x2, y2, x3, y3, x4, y4, fill='yellow')
 
-def draw_pacman(canvas, bbox, rotate_angle=0):
-	start = 35 + rotate_angle
+def draw_pacman(canvas, bbox, angle=0, color='blue', outline='black', ratio=1):
+	start = 35 + angle
 	extent = 290
-	return canvas.create_arc(*bbox, start=start, extent=extent, fill='blue')
+	canvas_id = canvas.create_arc(*bbox, start=start, extent=extent, fill=color, outline=outline)
+
+	if ratio < 1:
+		x0, y0, x1, y1 = bbox
+		centerx = (x0 + x1) / 2
+		centery = (y0 + y1) / 2
+		canvas.scale(canvas_id, centerx, centery, ratio, ratio)
+	
+	return canvas_id
 
 def draw_text(canvas, bbox, text):
 	if text == None:
@@ -41,16 +49,6 @@ def draw_text(canvas, bbox, text):
 	y = (y0 + y1) / 2
 	return canvas.create_text(x, y, text=text, font=('Times', 16), justify=tk.CENTER)
 
-def draw_trace(canvas, bbox, angle=0):
-	x0, y0, x1, y1 = bbox
-	centerx = (x0 + x1) / 2
-	centery = (y0 + y1) / 2
-
-	start = 35 + angle
-	extent = 290
-	canvas_id = canvas.create_arc(*bbox, start=start, extent=extent, fill='#f0fff8')
-	#self.canvas.scale(canvas_id, centerx, centery, ratio, ratio)
-	return canvas_id
 
 draw_func_list = [draw_red_solid_circle, draw_black_box, draw_yellow_star]
 
@@ -86,30 +84,26 @@ class DrawingManager(threading.Thread):
 
 		return self
 
-	def bounding_box(self, cell_id_or_index):
+	def bounding_box(self, index_or_id):
 		"""Get a cell's bounding box coordinates"""
 
-		cell_index = cell_id_or_index
-		if isinstance(cell_id_or_index, int) == True:
-			cell_index = utils.cell_index_from_id(cell_id_or_index, self.grid_dimension)
+		cell_index = self.grid.insure_index(index_or_id)
 
-		left = self.cell_size[0] * cell_index[0] + self.origin[0]
-		top = self.cell_size[1] * cell_index[1] + self.origin[1]
+		left = self.cell_size[0] * cell_index[1] + self.origin[0]
+		top = self.cell_size[1] * cell_index[0] + self.origin[1]
 		right = left + self.cell_size[0]
 		bottom = top + self.cell_size[1]
 		return (left, top, right, bottom)
 
 	# draw the whole 'chess board' for this grid environment
 	def draw_grid(self):
-		n_cells = self.grid_dimension[0] * self.grid_dimension[1]
-		for cell_id in range(n_cells):
-			cell_index = utils.cell_index_from_id(cell_id)
-			bbox = self.bbox_from_index(cell_index)
+		for cell_id in range(self.grid.n_cells):
+			bbox = self.bounding_box(cell_id)
 			draw_cell_bbox(self.canvas, bbox)
 	
-	def draw_on_cell(self, cell_id_or_index, image=None, text=None):
-		bbox = self.bounding_box(cell_id_or_index)
-		draw_info = self.grid.cell(cell_id_or_index)
+	def draw_on_cell(self, index_or_id, image=None, text=None):
+		bbox = self.bounding_box(index_or_id)
+		draw_info = self.grid.cell(index_or_id)
 
 		if image != None:
 			self.canvas.delete(draw_info.image_canvas_id)
@@ -119,34 +113,39 @@ class DrawingManager(threading.Thread):
 			self.canvas.delete(draw_info.text_canvas_id)
 			draw_info.text_canvas_id = draw_text(self.canvas, bbox, text)
 
-	#def draw_trace(self, index, angle=0, ratio=1):
-	#	x0, y0, x1, y1 = self.coord_from_index(index)
-	#	draw_info = self.grid.block_from_index(index)
+	def draw_trace(self, index_or_id, angle=0, ratio=0.5):
+		bbox = self.bounding_box(index_or_id)
+		color = '#f8fff8'
 
-	#	if draw_info.shape_canvas_id == None:
-	#		draw_info.shape_canvas_id = self.drawing_helper.draw_trace(x0, y0, x1, y1, angle, ratio)
+		self.canvas.delete('trace'+str(index_or_id))
+
+		trace_canvas_id = draw_pacman(self.canvas, bbox, angle, color, color, ratio)
+		self.canvas.tag_lower(trace_canvas_id, None)
+
+		self.canvas.addtag_withtag('trace', trace_canvas_id)
+		self.canvas.addtag_withtag('trace'+str(index_or_id), trace_canvas_id)
+
+	def delete_trace(self):
+		self.canvas.delete('trace')
 		
-	def draw_agent(self, cell_id_or_index, rotate_angle=0):
-		bbox = self.bounding_box(cell_id_or_index)
-		self.agent_canvas_id = draw_pacman(self.canvas, bbox, rotate_angle)
+	def draw_agent(self, index_or_id, angle=0):
+		bbox = self.bounding_box(index_or_id)
+		self.agent_canvas_id = draw_pacman(self.canvas, bbox, angle)
 		
 	def remove_agent(self):
 		self.canvas.delete(self.agent_canvas_id)
 
-	def rotate_agent(self, cell_id_or_index, rotate_to):
-		bbox = self.bounding_box(cell_id_or_index)
+	def rotate_agent(self, index_or_id, rotate_angle):
+		bbox = self.bounding_box(index_or_id)
 
 		# tkinter doesn't support rotate a canvas element, so we delete then draw again
 		self.canvas.delete(self.agent_canvas_id)
 		self.agent_canvas_id = draw_pacman(self.canvas, bbox, rotate_angle)
 
-	def move_agent(self, cell_id_or_index, cell_id_or_index_next):
-		bbox = self.bounding_box(cell_id_or_index)
-		bbox_next = self.bounding_box(cell_id_or_index_next)
+	def move_agent(self, index_or_id, index_or_id_next):
+		bbox = self.bounding_box(index_or_id)
+		bbox_next = self.bounding_box(index_or_id_next)
 
-		x0, y0, x1, y1 = self.coord_from_index(index)
-		xx0, yy0, xx1, yy1 = self.coord_from_index(index_new)
-		
 		move_x = bbox_next[0] - bbox[0]
 		move_y = bbox_next[1] - bbox[1]
 		self.canvas.move(self.agent_canvas_id, move_x, move_y)
