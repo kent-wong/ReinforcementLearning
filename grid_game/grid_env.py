@@ -82,7 +82,7 @@ class Env():
 
 			plugin.episode_end()
 
-	def test(self, plugin, n_episodes, delay_per_step=0.2, only_exploitation=True):
+	def test(self, plugin, n_episodes=1, delay_per_step=0.5, only_exploitation=True):
 		assert plugin != None
 		assert n_episodes > 0
 
@@ -102,7 +102,7 @@ class Env():
 				state, action, reward, state_next, is_terminal = self.step(action)
 				time.sleep(delay_per_step)
 
-	def add_object(self, index_or_id, reward, value, is_terminal):
+	def add_object(self, index_or_id, value, reward=0, is_terminal=False):
 		cell_id = self.grid.insure_id(index_or_id)
 		cell = Env.CellData(cell_id, reward, value, is_terminal)
 		self.grid.set_cell(cell_id, cell)
@@ -116,9 +116,28 @@ class Env():
 
 		self.drawing_manager.draw_on_cell(index_or_id, image)
 
-	def show_text(self, cell_id_or_index, text):
-		if text != None:
-			self.drawing_manager.draw_on_cell(cell_id_or_index, text=text)
+	def show_text(self, index_or_id, text):
+		if text == None:
+			return
+
+		if isinstance(text, (list, tuple)) == True:
+			text_list = []
+			for action, word in enumerate(text):
+				if action == Env.N:
+					action = tk.N
+				elif action == Env.S:
+					action = tk.S
+				elif action == Env.W:
+					action = tk.W
+				elif action == Env.E:
+					action = tk.E
+				else:
+					assert False
+
+				text_list.append((word, action))
+			self.drawing_manager.draw_text_list(index_or_id, text_list)
+		else:	
+			self.drawing_manager.draw_on_cell(index_or_id, text=text)
 		
 	def angle_from_orientation(self, ori):
 		angle = 0
@@ -189,9 +208,9 @@ class Env():
 	# setup the layout of environment
 	# you can experiment algorithms by changing this 'layout'
 	def set_layout(self):
-		self.add_object((6, 6), 0, 100, True)
-		#self.add_object((8, 8), 0,  10, False)
-		#self.add_object((6, 7), 0,  10, False)
+		self.add_object((6, 6), value=100)
+		self.add_object((8, 8), value=10)
+		self.add_object((6, 7), value=10)
 
 
 if __name__ == '__main__':
@@ -201,34 +220,21 @@ if __name__ == '__main__':
 	from q_learning import QLearning
 
 	# set the environment
-	env = Env((10, 10), (90, 90))
-	env.set_layout()
-
-	# a naive 'implementation' for algorithm plugin, just for quick test
-	class Foo(AlgPlugin):
-		def __init__(self):
-			super().__init__()
-
-		def next_action(self, state):
-			action = random.choice([Env.N, Env.S, Env.W, Env.E, Env.E, Env.S])
-			return action
-
-	#plugin = Foo()
+	env = Env((10, 10), (120, 90))
+	env.add_object((6, 6), value=200, is_terminal=True)
+	env.add_object((6, 4), value=100, is_terminal=True)
+	env.add_object((3, 3), value=-100, is_terminal=True)
 
 	# test for q-learning algorithm
 	# hyperparameters
 	alpha = 0.1
 	gamma = 0.99
-	epsilon = 0.9
-	n_episodes = 100
+	epsilon = 0.7
+	n_episodes = 5000
 
 	plugin = QLearning(alpha, gamma, epsilon)
 	env.train(plugin, n_episodes, delay_per_step=0)
-	env.test(plugin, n_episodes)
-
-	#for s in range(env.grid.n_cells):
-	#	text = "state " + str(s)
-	#	env.show_text(s, text)
+	env.test(plugin)
 
 
 	print("end...")

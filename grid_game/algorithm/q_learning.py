@@ -57,7 +57,7 @@ class QLearning(AlgPlugin):
 			return self.qtable[state][action]
 
 	def update_callback(self, state, action, delta):
-		print("update_callback(): state: {}, action: {}, delta: {}".format(state, action, delta))
+		#print("update_callback(): state: {}, action: {}, delta: {}".format(state, action, delta))
 		self.qtable[state][action] += delta
 
 	####################################################
@@ -100,9 +100,11 @@ class QLearning(AlgPlugin):
 		if action_values == None:
 			return None
 
-		max_value = np.max(self.qtable[state])
-		max_value = round(max_value, 2)
-		text = str(max_value)
+		text = []
+		for v in action_values:
+			v = int(v)
+			text.append(str(v))
+
 		return text
 
 	def action_values(self, state):
@@ -115,9 +117,6 @@ class QLearning(AlgPlugin):
 				print(str(float(value)) + '  ', end='')
 			print("")
 
-	#def set_state_value(self, state, value):
-	#	self.qtable[state] = [value] * self.n_actions
-		
 	def whole_episode(self, one_episode_record):
 		self.episode_start(one_episode_record[0][0])
 		for state, action, reward, state_next in one_episode_record:

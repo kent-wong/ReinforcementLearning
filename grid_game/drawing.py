@@ -9,8 +9,8 @@ def draw_cell_bbox(canvas, bbox):
 def draw_red_solid_circle(canvas, bbox):
 	return canvas.create_oval(*bbox, fill='red')
 
-def draw_black_box(canvas, bbox):
-	return canvas.create_rectangle(*bbox, fill='black')
+def draw_gray_box(canvas, bbox):
+	return canvas.create_rectangle(*bbox, fill='gray')
 
 def draw_yellow_star(canvas, bbox):
 	l, t, r, b = bbox
@@ -40,17 +40,35 @@ def draw_pacman(canvas, bbox, angle=0, color='blue', outline='black', ratio=1):
 	
 	return canvas_id
 
-def draw_text(canvas, bbox, text):
+def draw_text(canvas, bbox, text, anchor):
 	if text == None:
 		return None
 
 	x0, y0, x1, y1 = bbox
-	x = (x0 + x1) / 2
-	y = (y0 + y1) / 2
-	return canvas.create_text(x, y, text=text, font=('Times', 16), justify=tk.CENTER)
+	if anchor == tk.CENTER:
+		x = (x0 + x1) / 2
+		y = (y0 + y1) / 2
+	elif anchor == tk.N:
+		x = (x0 + x1) / 2
+		y = y0
+	elif anchor == tk.S:
+		x = (x0 + x1) / 2
+		y = y1
+	elif anchor == tk.W:
+		x = x0
+		y = (y0 + y1) / 2
+		text = ' ' + text
+	elif anchor == tk.E:
+		x = x1
+		y = (y0 + y1) / 2
+		text = text + ' '
+	else:
+		assert False
+
+	return canvas.create_text(x, y, text=text, font=('Times', 16), anchor=anchor)
 
 
-draw_func_list = [draw_red_solid_circle, draw_black_box, draw_yellow_star]
+draw_func_list = [draw_red_solid_circle, draw_gray_box, draw_yellow_star]
 
 
 """A class that helps drawing shapes on a tkinter canvas"""
@@ -111,7 +129,17 @@ class DrawingManager(threading.Thread):
 
 		if text != None:
 			self.canvas.delete(draw_info.text_canvas_id)
-			draw_info.text_canvas_id = draw_text(self.canvas, bbox, text)
+			draw_info.text_canvas_id = draw_text(self.canvas, bbox, text, anchor=tk.CENTER)
+
+	def draw_text_list(self, index_or_id, text_anchor_list):
+		bbox = self.bounding_box(index_or_id)
+		cell_id = self.grid.insure_id(index_or_id)
+		tag = 'text_list' + str(cell_id)
+
+		self.canvas.delete(tag)
+		for text, anchor in text_anchor_list:
+			canvas_id = draw_text(self.canvas, bbox, text, anchor)
+			self.canvas.addtag_withtag(tag, canvas_id)
 
 	def draw_trace(self, index_or_id, angle=0, ratio=0.5):
 		bbox = self.bounding_box(index_or_id)

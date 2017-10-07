@@ -32,10 +32,6 @@ class TD():
 		delta = target - predict
 		delta *= self.alpha
 
-		# wk_debug
-		if state_next == 66:
-			print("!!!! target is {}, predict is {}, delta is {}".format(target, predict, delta))
-
 		# if TD(0), won't bother to record eligibility
 		if self.eligibility == 0:
 			self.update_func(state, action, delta)
