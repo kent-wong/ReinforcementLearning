@@ -1,4 +1,5 @@
-"""A basic class for td-learning, eligibility(lambda) can be any number between [0, 1]. This class can be used for off-policy and on-policy learning algorithm."""
+"""A basic class for td-learning, eligibility(lambda) can be any number between [0, 1].
+This class can be used both for off-policy(Q-leaning) and on-policy(SARSA) learning algorithm."""
 class TD():
 	def __init__(self, alpha, gamma, eligibility, value_func_callback, update_func_callback):
 		# hyperparameters
@@ -22,7 +23,7 @@ class TD():
 		assert self.last_state == state
 		self.last_state = state_next
 
-		# use callback to get value of state/action from user of this class
+		# use value callback to get value of state/action from user of this class
 		predict = self.value_func(state, action)
 		target = self.value_func(state_next, action_next)
 		target *= self.gamma

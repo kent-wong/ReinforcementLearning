@@ -17,6 +17,11 @@ class Env():
 	# agent
 	AGENT_LOC = (0, 0)
 
+	# object type, each grid cell can be placed at most one object on it.
+	OBJ_TYPE_TERM = -1  # this object is terminal, an agent stepped on this object will be in a terminal state
+	OBJ_TYPE_NONE = 0
+	OBJ_TYPE_PICKABLE = 1  # agent can pick this object
+
 	class CellData():
 		def __init__(self, cell_id, reward=0, preset_value=None, is_terminal=False):
 			self.cell_id = cell_id	# unique Id
@@ -216,25 +221,32 @@ class Env():
 if __name__ == '__main__':
 	# import algorithms
 	sys.path.append('./algorithm')
-	from alg_plugin import AlgPlugin
 	from q_learning import QLearning
+	from sarsa import Sarsa
 
 	# set the environment
-	env = Env((10, 10), (120, 90))
-	env.add_object((6, 6), value=200, is_terminal=True)
-	env.add_object((6, 4), value=100, is_terminal=True)
-	env.add_object((3, 3), value=-100, is_terminal=True)
+	env = Env((8, 8), (120, 90))
+	env.add_object((4, 3), value=100, is_terminal=True)
+	#env.add_object((3, 3), value=-1000, is_terminal=True)
+	#env.add_object((3, 5), value=-100, is_terminal=True)
+	#env.add_object((5, 3), value=-100, is_terminal=True)
+	#env.add_object((6, 4), value=100, is_terminal=True)
+	env.add_object((1, 5), value=100)
 
-	# test for q-learning algorithm
+	# test for TD learning algorithms
 	# hyperparameters
 	alpha = 0.1
 	gamma = 0.99
 	epsilon = 0.7
-	n_episodes = 5000
+	lambda_ = 0.7
+	n_episodes = 2000
 
-	plugin = QLearning(alpha, gamma, epsilon)
+	#plugin = QLearning(alpha, gamma, epsilon)
+	plugin = Sarsa(alpha, gamma, lambda_, epsilon)
 	env.train(plugin, n_episodes, delay_per_step=0)
-	env.test(plugin)
+
+	print("agent is now walking ...")
+	#env.test(plugin)
+	env.test(plugin, 100, only_exploitation=False)
 
 
-	print("end...")
