@@ -120,16 +120,27 @@ class DrawingManager(threading.Thread):
 			draw_cell_bbox(self.canvas, bbox)
 	
 	def draw_on_cell(self, index_or_id, image=None, text=None):
+		cell_id = self.grid.insure_id(index_or_id)
 		bbox = self.bounding_box(index_or_id)
 		draw_info = self.grid.cell(index_or_id)
 
 		if image != None:
-			self.canvas.delete(draw_info.image_canvas_id)
-			draw_info.image_canvas_id = draw_func_list[image](self.canvas, bbox)
+			tag = 'image' + str(cell_id)
+			self.canvas.delete(tag)
+			canvas_id = draw_func_list[image](self.canvas, bbox)
+			self.canvas.addtag_withtag(tag, canvas_id)
 
 		if text != None:
-			self.canvas.delete(draw_info.text_canvas_id)
-			draw_info.text_canvas_id = draw_text(self.canvas, bbox, text, anchor=tk.CENTER)
+			tag = 'text' + str(cell_id)
+			self.canvas.delete(tag)
+			canvas_id = draw_text(self.canvas, bbox, text, anchor=tk.CENTER)
+			self.canvas.addtag_withtag(tag, canvas_id)
+
+	def clear_on_cell(self, index_or_id):
+		cell_id = self.grid.insure_id(index_or_id)
+		self.canvas.delete('image' + str(cell_id))
+		self.canvas.delete('text' + str(cell_id))
+		self.canvas.delete('text_list' + str(cell_id))
 
 	def draw_text_list(self, index_or_id, text_anchor_list):
 		bbox = self.bounding_box(index_or_id)

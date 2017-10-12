@@ -6,6 +6,9 @@ import sys
 from grid import Grid
 from drawing import DrawingManager
 
+class Agent():
+	pass
+
 class Env():
 	# actions
 	N = 0
@@ -29,8 +32,10 @@ class Env():
 			self.preset_value = preset_value
 			self.is_terminal = is_terminal
 
-	def __init__(self, grid_dimension=(10, 10), cell_size=(80, 80), default_rewards=0):
+	def __init__(self, grid_dimension=(10, 10), cell_size=(120, 90), default_rewards=0):
 		# initialize agent info
+		self.default_agent_location = Env.AGENT_LOC
+		self.default_agent_orientation = Env.E
 		self.agent_location = Env.AGENT_LOC
 		self.agent_orientation = Env.E
 
@@ -46,8 +51,9 @@ class Env():
 		self.drawing_manager.draw_grid()
 
 		self.reset()
+		self.default_rewards = default_rewards
 
-	def train(self, plugin, n_episodes, delay_per_step=0, dont_show_steps=False):
+	def train(self, plugin, n_episodes, delay_per_step=0, show=True):
 		assert plugin != None
 		assert n_episodes > 0
 
@@ -63,27 +69,28 @@ class Env():
 			self.show_text(cell_id, text)
 
 		for episode in range(n_episodes):
-			self.reset()  # reset agent's location
+			self.reset(show)  # reset agent's location
 			time.sleep(delay_per_step)
 
-			print("training episode {} ...".format(episode))
-			state_next = self.grid.insure_id(self.agent_location)  # starting state
-			plugin.episode_start(episode, state_next)
+			#print("training episode {} ...".format(episode))
+			state = self.grid.insure_id(self.agent_location)  # starting state
+			action = plugin.episode_start(episode, state)
 
 			is_terminal = False
 			while is_terminal == False:
-				action = plugin.next_action(state_next)  # query plugin for next action
+				#action = plugin.next_action(state_next)  # query plugin for next action
 
 				# tell environment what action to move
-				state, action, reward, state_next, is_terminal = self.step(action)
+				state, action, reward, state_next, is_terminal = self.step(action, show)
 				time.sleep(delay_per_step)
 
 				# notify plugin this step
-				plugin.one_step(state, action, reward, state_next, is_terminal)
+				action = plugin.one_step(state, action, reward, state_next, is_terminal)
 
 				# try to show some info on grid, the info to show is decided by plugin
-				text = plugin.get_text_to_display(state)
-				self.show_text(state, text)
+				if show == True:
+					text = plugin.get_text_to_display(state)
+					self.show_text(state, text)
 
 			plugin.episode_end()
 
@@ -107,7 +114,7 @@ class Env():
 				state, action, reward, state_next, is_terminal = self.step(action)
 				time.sleep(delay_per_step)
 
-	def add_object(self, index_or_id, value, reward=0, is_terminal=False):
+	def add_object(self, index_or_id, reward=0, value=0, is_terminal=False):
 		cell_id = self.grid.insure_id(index_or_id)
 		cell = Env.CellData(cell_id, reward, value, is_terminal)
 		self.grid.set_cell(cell_id, cell)
@@ -120,6 +127,13 @@ class Env():
 			image = self.drawing_manager.IMAGE_BLACK_BOX
 
 		self.drawing_manager.draw_on_cell(index_or_id, image)
+
+	def remove_object(self, index_or_id):
+		cell_id = self.grid.insure_id(index_or_id)
+		data = Env.CellData(cell_id, reward=self.default_rewards)
+		self.grid.set_cell(cell_id, data)
+
+		self.drawing_manager.clear_on_cell(index_or_id)
 
 	def show_text(self, index_or_id, text):
 		if text == None:
@@ -156,18 +170,19 @@ class Env():
 
 		return angle
 
-	def reset(self):
+	def reset(self, show=True):
 		self.agent_location = Env.AGENT_LOC
 		self.agent_orientation = Env.E
 
-		self.drawing_manager.remove_agent()
 		angle = self.angle_from_orientation(self.agent_orientation)
-		self.drawing_manager.draw_agent(self.agent_location, angle)
 
-		# delete previous traces so we don't mess up the environment
-		self.drawing_manager.delete_trace()
+		if show == True:
+			self.drawing_manager.remove_agent()
+			self.drawing_manager.draw_agent(self.agent_location, angle)
+			# delete previous traces so we don't mess up the environment
+			self.drawing_manager.delete_trace()
 		
-	def step(self, action):
+	def step(self, action, show=True):
 		index = self.agent_location
 		index_new = list(index)
 
@@ -190,15 +205,16 @@ class Env():
 
 		angle = self.angle_from_orientation(action)
 		# rotate agent if its orientation changed, even if it's not moving
-		if self.agent_orientation != action:
+		if self.agent_orientation != action and show == True:
 			self.drawing_manager.rotate_agent(index, angle)
-			self.agent_orientation = action
 
 		# move agent to its new location
-		if index_new != index:
+		if index_new != index and show == True:
 			self.drawing_manager.move_agent(index, index_new)
-			self.agent_location = index_new
 			self.drawing_manager.draw_trace(index, angle)
+
+		self.agent_location = index_new
+		self.agent_orientation = action
 
 		cell = self.grid.cell(index)
 		cell_next = self.grid.cell(index_new)
@@ -225,28 +241,29 @@ if __name__ == '__main__':
 	from sarsa import Sarsa
 
 	# set the environment
-	env = Env((8, 8), (120, 90))
-	env.add_object((4, 3), value=100, is_terminal=True)
-	#env.add_object((3, 3), value=-1000, is_terminal=True)
+	env = Env((8, 8), (120, 90), default_rewards=0)
+	env.add_object((3, 3), value=100, is_terminal=True)
+	env.add_object((5, 6), value=200, is_terminal=True)
 	#env.add_object((3, 5), value=-100, is_terminal=True)
 	#env.add_object((5, 3), value=-100, is_terminal=True)
 	#env.add_object((6, 4), value=100, is_terminal=True)
-	env.add_object((1, 5), value=100)
+	#env.add_object((1, 5), value=1000)
 
 	# test for TD learning algorithms
 	# hyperparameters
 	alpha = 0.1
-	gamma = 0.99
-	epsilon = 0.7
+	gamma = 1
+	epsilon = 0.5
 	lambda_ = 0.7
-	n_episodes = 2000
+	n_episodes = 1000
 
-	#plugin = QLearning(alpha, gamma, epsilon)
-	plugin = Sarsa(alpha, gamma, lambda_, epsilon)
-	env.train(plugin, n_episodes, delay_per_step=0)
+	plugin = QLearning(alpha, gamma, epsilon)
+	#plugin = Sarsa(alpha, gamma, lambda_, epsilon)
+	env.train(plugin, n_episodes, delay_per_step=0, show=True)
 
 	print("agent is now walking ...")
-	#env.test(plugin)
-	env.test(plugin, 100, only_exploitation=False)
+	env.test(plugin)
+	#env.test(plugin, 100, only_exploitation=False)
 
+	#env.remove_object((4, 3))
 

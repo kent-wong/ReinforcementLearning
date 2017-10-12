@@ -11,18 +11,13 @@ class TD():
 		self.value_func = value_func_callback
 		self.update_func = update_func_callback
 
-		self.start_state = None
-		self.last_state = None
 		self.eligible = {}
 
 	def episode_start(self, start_state):
-		self.start_state = start_state
-		self.last_state = start_state
+		self.eligible = {}
 
 	def step(self, state, action, reward, state_next, action_next=None):
-		assert self.last_state == state
-		self.last_state = state_next
-
+		# calculate predict value and target value
 		# use value callback to get value of state/action from user of this class
 		predict = self.value_func(state, action)
 		target = self.value_func(state_next, action_next)
@@ -30,8 +25,7 @@ class TD():
 		target += reward
 
 		# calculate the 'Temporal Difference' between two states
-		delta = target - predict
-		delta *= self.alpha
+		delta = self.alpha * (target - predict)
 
 		# if TD(0), won't bother to record eligibility
 		if self.eligibility == 0:
@@ -45,6 +39,4 @@ class TD():
 			
 
 	def episode_end(self):	
-		self.start_state = None
-		self.last_state = None
-		self.eligible = {}
+		pass

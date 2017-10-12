@@ -31,7 +31,9 @@ class TDLearning(AlgPlugin):
 		self.qtable = {}  
 
 	def value_callback(self, state, action):
+		"""TD algorithm call this function to query action-value of a state"""
 		#print("value_callback(): state: {}, action: {}".format(state, action))
+
 		if action == None:
 			return np.max(self.qtable[state])
 		else:
@@ -64,10 +66,14 @@ class TDLearning(AlgPlugin):
 	def one_step(self, state, action, reward, state_next, is_terminal):
 		if self.qtable.get(state_next) == None:
 			self.qtable[state_next] = [0] * self.n_actions
-		next_action = None
+
+		next_action = self.next_action(state_next)
 		if self.next_action_considered == True:
-			next_action = self.next_action(state_next)
-		return self.td.step(state, action, reward, state_next, next_action)
+			use_this_action = next_action
+		else:
+			use_this_action = None
+		self.td.step(state, action, reward, state_next, use_this_action)
+		return next_action
 
 	def episode_end(self):
 		self.td.episode_end()
