@@ -22,8 +22,8 @@ class TDLearning(AlgPlugin):
 		self.td = TD(alpha, gamma, eligibility, self.value_callback, self.update_callback)
 
 		# filled in when we know environment layout
-		self.n_states = None
-		self.n_actions = None
+		self.n_features = None
+		self.action_space = None
 
 		# underlying storage for store value per action per state
 		# it's called 'q-table' just for convention, actually it can be used for any TD learning
@@ -48,24 +48,24 @@ class TDLearning(AlgPlugin):
 	#    Below is the implementation of 'AlgPlugin' interface    #
 	#                                                            #
 	##############################################################
-	def layout(self, n_states, n_actions, preset_states_list):
-		self.n_states = n_states
-		self.n_actions = n_actions
+	def layout(self, n_features, action_space, preset_states_list):
+		self.n_features = n_features
+		self.action_space = action_space
 		self.qtable = {}
 
 		for (state, value, is_terminal) in preset_states_list:
-			self.qtable[state] = [value] * self.n_actions
+			self.qtable[state] = [value] * self.action_space.n_actions
 
 	def episode_start(self, episode, state):
 		#super().episode_start(episode, state)
 		if self.qtable.get(state) == None:
-			self.qtable[state] = [0] * self.n_actions
+			self.qtable[state] = [0] * self.action_space.n_actions
 		self.td.episode_start(state)
 		return self.next_action(state)
 
 	def one_step(self, state, action, reward, state_next, is_terminal):
 		if self.qtable.get(state_next) == None:
-			self.qtable[state_next] = [0] * self.n_actions
+			self.qtable[state_next] = [0] * self.action_space.n_actions
 
 		next_action = self.next_action(state_next)
 		if self.next_action_considered == True:

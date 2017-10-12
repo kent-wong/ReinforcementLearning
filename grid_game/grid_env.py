@@ -5,6 +5,8 @@ import sys
 
 from grid import Grid
 from drawing import DrawingManager
+sys.path.append('./algorithm')
+from alg_plugin import ActionSpace
 
 class Agent():
 	pass
@@ -62,8 +64,9 @@ class Env():
 			if cell.preset_value != None:
 				preset_states.append((cell.cell_id, cell.preset_value, cell.is_terminal))
 
+		action_space = ActionSpace(range(Env.N_ACTIONS))
 		# notify plugin environment layout and query plugin to show some info
-		plugin.layout(self.grid.n_cells, Env.N_ACTIONS, preset_states)
+		plugin.layout(1, action_space, preset_states)
 		for cell_id in range(self.grid.n_cells):
 			text = plugin.get_text_to_display(cell_id)
 			self.show_text(cell_id, text)
