@@ -69,15 +69,14 @@ def draw_text(canvas, bbox, text, anchor):
 
 
 draw_func_list = [draw_red_solid_circle, draw_gray_box, draw_yellow_star]
+drawing_function = {'red_solid_circle': draw_red_solid_circle,
+			'yellow_star': draw_yellow_star,
+			'gray_box': draw_gray_box,
+			'pacman': draw_pacman}
 
 
 """A class that helps drawing shapes on a tkinter canvas"""
 class DrawingManager(threading.Thread):
-	# image type on cell
-	IMAGE_RED_CIRCLE = 0
-	IMAGE_BLACK_BOX = 1
-	IMAGE_YELLOW_STAR = 2
-
 	class DrawingInfo():
 		def __init__(self):
 			self.image_canvas_id = None
@@ -119,6 +118,38 @@ class DrawingManager(threading.Thread):
 			bbox = self.bounding_box(cell_id)
 			draw_cell_bbox(self.canvas, bbox)
 	
+	def draw_an_object(self, index_or_id, obj_name):
+		cell_id = self.grid.insure_id(index_or_id)
+		bbox = self.bounding_box(index_or_id)
+
+		tag = str(obj_name) + '_' + str(cell_id)
+		tag_of_cell = str(cell_id) + '_cell_id'
+
+		self.canvas.delete(tag)
+		canvas_id = drawing_function[obj_name](self.canvas, bbox)
+		self.canvas.addtag_withtag(tag, canvas_id)
+		self.canvas.addtag_withtag(tag_of_cell, tag)
+
+		# wk_debug
+		print("tag:", self.canvas.find_withtag(tag))
+		print("tag_of_cell:", self.canvas.find_withtag(tag_of_cell))
+
+	def delete_an_object(self, index_or_id, obj_name):
+		cell_id = self.grid.insure_id(index_or_id)
+		tag = str(obj_name) + '_' + str(cell_id)
+		tag_of_cell = str(cell_id) + '_cell_id'
+		self.canvas.dtag(tag, tag_of_cell)
+		self.canvas.delete(tag)
+
+	def delete_objects_on_cell(self, index_or_id):
+		cell_id = self.grid.insure_id(index_or_id)
+		tag_of_cell = str(cell_id) + '_cell_id'
+
+		# wk_debug
+		print(self.canvas.find_withtag(tag_of_cell))
+
+		self.canvas.delete(tag_of_cell)
+
 	def draw_on_cell(self, index_or_id, image=None, text=None):
 		cell_id = self.grid.insure_id(index_or_id)
 		bbox = self.bounding_box(index_or_id)

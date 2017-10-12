@@ -122,21 +122,22 @@ class Env():
 		cell = Env.CellData(cell_id, reward, value, is_terminal)
 		self.grid.set_cell(cell_id, cell)
 
+		dm = self.drawing_manager
+		assert dm != None
+
 		if is_terminal == True:
-			image = self.drawing_manager.IMAGE_RED_CIRCLE
+			dm.draw_an_object(index_or_id, 'red_solid_circle')
 		elif value >= 0:
-			image = self.drawing_manager.IMAGE_YELLOW_STAR
+			dm.draw_an_object(index_or_id, 'yellow_star')
 		else:
-			image = self.drawing_manager.IMAGE_BLACK_BOX
+			dm.draw_an_object(index_or_id, 'gray_box')
 
-		self.drawing_manager.draw_on_cell(index_or_id, image)
-
-	def remove_object(self, index_or_id):
+	def remove_objects_on_cell(self, index_or_id):
 		cell_id = self.grid.insure_id(index_or_id)
 		data = Env.CellData(cell_id, reward=self.default_rewards)
 		self.grid.set_cell(cell_id, data)
 
-		self.drawing_manager.clear_on_cell(index_or_id)
+		self.drawing_manager.delete_objects_on_cell(cell_id)
 
 	def show_text(self, index_or_id, text):
 		if text == None:
@@ -268,5 +269,6 @@ if __name__ == '__main__':
 	env.test(plugin)
 	#env.test(plugin, 100, only_exploitation=False)
 
-	#env.remove_object((4, 3))
+	print("end ...")
+	env.remove_objects_on_cell((3, 3))
 
