@@ -118,28 +118,38 @@ class DrawingManager(threading.Thread):
 			bbox = self.bounding_box(cell_id)
 			draw_cell_bbox(self.canvas, bbox)
 	
-	def draw_an_object(self, index_or_id, obj_name):
+	def draw_object(self, obj_type, index_or_id):
 		cell_id = self.grid.insure_id(index_or_id)
 		bbox = self.bounding_box(index_or_id)
 
-		tag = str(obj_name) + '_' + str(cell_id)
-		tag_of_cell = str(cell_id) + '_cell_id'
+		tag = obj_type + '_' + str(cell_id)
+		tag_of_this_type = obj_type + '_all'
 
 		self.canvas.delete(tag)
-		canvas_id = drawing_function[obj_name](self.canvas, bbox)
+		canvas_id = drawing_function[obj_type](self.canvas, bbox)
+
 		self.canvas.addtag_withtag(tag, canvas_id)
-		self.canvas.addtag_withtag(tag_of_cell, tag)
+		self.canvas.addtag_withtag(tag_of_this_type, tag)
 
 		# wk_debug
 		print("tag:", self.canvas.find_withtag(tag))
-		print("tag_of_cell:", self.canvas.find_withtag(tag_of_cell))
+		print("tag_of_cell:", self.canvas.find_withtag(tag_of_this_type))
+		print("non-exist-tag:", self.canvas.find_withtag("abcdefg"))
+		print("non-exist-tag len:", len(self.canvas.find_withtag("abcdefg")))
 
-	def delete_an_object(self, index_or_id, obj_name):
+		return canvas_id
+
+	def delete_object(self, obj_type, index_or_id):
 		cell_id = self.grid.insure_id(index_or_id)
-		tag = str(obj_name) + '_' + str(cell_id)
-		tag_of_cell = str(cell_id) + '_cell_id'
-		self.canvas.dtag(tag, tag_of_cell)
+		tag = obj_type + '_' + str(cell_id)
+		#self.canvas.dtag(tag, tag_of_cell)
 		self.canvas.delete(tag)
+
+	def is_object_on_cell(self, obj_type, index_or_id):
+		cell_id = self.grid.insure_id(index_or_id)
+		tag = obj_type + '_' + str(cell_id)
+		
+		return len(self.canvas.find_withtag(tag))
 
 	def delete_objects_on_cell(self, index_or_id):
 		cell_id = self.grid.insure_id(index_or_id)
@@ -150,28 +160,28 @@ class DrawingManager(threading.Thread):
 
 		self.canvas.delete(tag_of_cell)
 
-	def draw_on_cell(self, index_or_id, image=None, text=None):
-		cell_id = self.grid.insure_id(index_or_id)
-		bbox = self.bounding_box(index_or_id)
-		draw_info = self.grid.cell(index_or_id)
-
-		if image != None:
-			tag = 'image' + str(cell_id)
-			self.canvas.delete(tag)
-			canvas_id = draw_func_list[image](self.canvas, bbox)
-			self.canvas.addtag_withtag(tag, canvas_id)
-
-		if text != None:
-			tag = 'text' + str(cell_id)
-			self.canvas.delete(tag)
-			canvas_id = draw_text(self.canvas, bbox, text, anchor=tk.CENTER)
-			self.canvas.addtag_withtag(tag, canvas_id)
-
-	def clear_on_cell(self, index_or_id):
-		cell_id = self.grid.insure_id(index_or_id)
-		self.canvas.delete('image' + str(cell_id))
-		self.canvas.delete('text' + str(cell_id))
-		self.canvas.delete('text_list' + str(cell_id))
+#	def draw_on_cell(self, index_or_id, image=None, text=None):
+#		cell_id = self.grid.insure_id(index_or_id)
+#		bbox = self.bounding_box(index_or_id)
+#		draw_info = self.grid.cell(index_or_id)
+#
+#		if image != None:
+#			tag = 'image' + str(cell_id)
+#			self.canvas.delete(tag)
+#			canvas_id = draw_func_list[image](self.canvas, bbox)
+#			self.canvas.addtag_withtag(tag, canvas_id)
+#
+#		if text != None:
+#			tag = 'text' + str(cell_id)
+#			self.canvas.delete(tag)
+#			canvas_id = draw_text(self.canvas, bbox, text, anchor=tk.CENTER)
+#			self.canvas.addtag_withtag(tag, canvas_id)
+#
+#	def clear_on_cell(self, index_or_id):
+#		cell_id = self.grid.insure_id(index_or_id)
+#		self.canvas.delete('image' + str(cell_id))
+#		self.canvas.delete('text' + str(cell_id))
+#		self.canvas.delete('text_list' + str(cell_id))
 
 	def draw_text_list(self, index_or_id, text_anchor_list):
 		bbox = self.bounding_box(index_or_id)
@@ -187,16 +197,19 @@ class DrawingManager(threading.Thread):
 		bbox = self.bounding_box(index_or_id)
 		color = '#f8fff8'
 
-		self.canvas.delete('trace'+str(index_or_id))
+		cell_id = self.grid.insure_id(index_or_id)
+		tag = 'trace_'+str(cell_id)
 
+		self.canvas.delete(tag)  # delete old trace on this cell
 		trace_canvas_id = draw_pacman(self.canvas, bbox, angle, color, color, ratio)
+		# move the 'trace' to the lowest layer of canvas elements, so it doesn't block other elements(such as text)
 		self.canvas.tag_lower(trace_canvas_id, None)
 
-		self.canvas.addtag_withtag('trace', trace_canvas_id)
-		self.canvas.addtag_withtag('trace'+str(index_or_id), trace_canvas_id)
+		self.canvas.addtag_withtag('all_trace', trace_canvas_id)
+		self.canvas.addtag_withtag(tag, trace_canvas_id)
 
 	def delete_trace(self):
-		self.canvas.delete('trace')
+		self.canvas.delete('all_trace')
 		
 	def draw_agent(self, index_or_id, angle=0):
 		bbox = self.bounding_box(index_or_id)
