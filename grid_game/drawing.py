@@ -6,7 +6,7 @@ from grid import Grid
 def draw_cell_bbox(canvas, bbox):
 	return canvas.create_rectangle(*bbox)
 
-def draw_red_solid_circle(canvas, bbox):
+def draw_red_ball(canvas, bbox):
 	return canvas.create_oval(*bbox, fill='red')
 
 def draw_gray_box(canvas, bbox):
@@ -68,8 +68,8 @@ def draw_text(canvas, bbox, text, anchor):
 	return canvas.create_text(x, y, text=text, font=('Times', 16), anchor=anchor)
 
 
-draw_func_list = [draw_red_solid_circle, draw_gray_box, draw_yellow_star]
-drawing_function = {'red_solid_circle': draw_red_solid_circle,
+draw_func_list = [draw_red_ball, draw_gray_box, draw_yellow_star]
+drawing_function = {'red_ball': draw_red_ball,
 			'yellow_star': draw_yellow_star,
 			'gray_box': draw_gray_box,
 			'pacman': draw_pacman}
@@ -183,6 +183,18 @@ class DrawingManager(threading.Thread):
 #		self.canvas.delete('text' + str(cell_id))
 #		self.canvas.delete('text_list' + str(cell_id))
 
+	def draw_text(self, index_or_id, text_dict):
+		bbox = self.bounding_box(index_or_id)
+		cell_id = self.grid.insure_id(index_or_id)
+		tag = 'text_' + str(cell_id)
+
+		self.canvas.delete(tag)
+		anchor_dict = {"N":tk.N, "S":tk.S, "W":tk.W, "E":tk.E, "C":tk.CENTER}
+		for anchor, text in text_dict.items():
+			canvas_id = draw_text(self.canvas, bbox, text, anchor_dict[anchor])
+			self.canvas.addtag_withtag(tag, canvas_id)
+		
+
 	def draw_text_list(self, index_or_id, text_anchor_list):
 		bbox = self.bounding_box(index_or_id)
 		cell_id = self.grid.insure_id(index_or_id)
@@ -258,7 +270,7 @@ class DrawingManager(threading.Thread):
 		self.grid = Grid(self.grid_dimension)
 		for i in range(self.grid.n_cells):
 			info = DrawingManager.DrawingInfo()
-			self.grid.all_cells().append(info)
+			self.grid.cells.append(info)
 
 		self.lock.release()
 

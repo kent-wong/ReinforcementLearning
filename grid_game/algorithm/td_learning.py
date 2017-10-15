@@ -32,6 +32,7 @@ class TDLearning(AlgPlugin):
 
 	def value_callback(self, state, action):
 		"""TD algorithm call this function to query action-value of a state"""
+
 		#print("value_callback(): state: {}, action: {}".format(state, action))
 
 		if action == None:
@@ -40,6 +41,8 @@ class TDLearning(AlgPlugin):
 			return self.qtable[state][action]
 
 	def update_callback(self, state, action, delta):
+		"""TD algorithm call this function to update action-value of a state"""
+
 		#print("update_callback(): state: {}, action: {}, delta: {}".format(state, action, delta))
 		self.qtable[state][action] += delta
 
@@ -63,37 +66,49 @@ class TDLearning(AlgPlugin):
 		self.td.episode_start(state)
 		return self.next_action(state)
 
-	def one_step(self, state, action, reward, state_next, is_terminal):
+	def one_step(self, state, action, reward, state_next, terminal):
 		if self.qtable.get(state_next) == None:
 			self.qtable[state_next] = [0] * self.action_space.n_actions
 
-		next_action = self.next_action(state_next)
+		next_action_index = self._next_action_index(state_next)
 		if self.next_action_considered == True:
-			use_this_action = next_action
+			use_this_action = next_action_index
 		else:
 			use_this_action = None
-		self.td.step(state, action, reward, state_next, use_this_action)
-		return next_action
+
+		# need to translate from action to action_index, underlying TD algorithm
+		# assume that actions are non-negative integer
+		action_index = self.action_space.action_index(action)
+
+		self.td.step(state, action_index, reward, state_next, use_this_action)
+		return self.action_space.action_at(next_action_index)
 
 	def episode_end(self):
 		self.td.episode_end()
 
-	def next_action(self, state):
+	def _next_action_index(self, state):
 		return self.action_selection(self.epsilon, self.qtable[state])
 
-	def best_action(self, state):
-		return np.argmax(self.qtable[state])
+	def next_action(self, state):
+		"""Given the current state, based on selection algorithm select next action for agent"""
+		action_index = self._next_action_index(state)
+		return self.action_space.action_at(action_index)
 
-	def get_text_to_display(self, state):
+	def best_action(self, state):
+		"""Select the action that has max value in a given state"""
+		action_index = np.argmax(self.qtable[state])
+		return self.action_space.action_at(action_index)
+
+	def get_action_values(self, state):
+		return self.qtable.get(state)
+
+	def get_action_values_dict(self, state):
 		action_values = self.qtable.get(state)
 		if action_values == None:
 			return None
-
-		text = []
-		for v in action_values:
-			v = int(v)
-			text.append(str(v))
-		return text
+		else:
+			action_values_dict = {self.action_space.action_at(i):v for i, v in enumerate(action_values)}
+			return action_values_dict
 
 	def whole_episode(self, one_episode):
 		self.episode_start(one_episode[0][0])

@@ -5,14 +5,19 @@ class Grid():
 		self.n_cells = dimension[0] * dimension[1]  # just for convenience
 		self.cell_list = []
 
-	def all_cells(self):
+	@property
+	def cells(self):
 		return self.cell_list
 		
+	@cells.setter
+	def cells(self, new_list):
+		self.cell_list = new_list
+
 	def foreach(self, func):
 		for i, cell in enumerate(self.cell_list):
 			func(i, cell)
 
-	def cell(self, index_or_id):
+	def cell_at(self, index_or_id):
 		cell_id = self.insure_id(index_or_id)
 		return self.cell_list[cell_id]
 
@@ -32,7 +37,7 @@ class Grid():
 		if isinstance(index_or_id, int) == True:
 			cell_index = self.cell_index_from_id(index_or_id, self.dimension[0])
 
-		return cell_index
+		return tuple(cell_index)
 
 	@staticmethod
 	def cell_index_from_id(cell_id, width):
@@ -56,3 +61,6 @@ if __name__ == "__main__":
 	print("insure id:", cell_id)
 	cell_index = grid.insure_index(11)
 	print("insure index:", cell_index)
+
+	grid.cells
+	grid.cells = [1, 2, 3]
