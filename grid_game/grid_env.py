@@ -10,9 +10,6 @@ sys.path.append('./algorithm')
 from alg_plugin import ActionSpace
 
 
-class Agent():
-	pass
-
 class GridObject():
 	"""A class represents an object(image or text) that resides inside a grid cell"""
 
@@ -54,14 +51,103 @@ class GridObject():
 		return self._reward
 
 
-class Env():
-	def __init__(self, grid_dimension=(10, 10), cell_size=(120, 90), default_rewards=0):
-		# initialize agent info
-		self.default_agent_location = (0, 0)
-		self.default_agent_orientation = 'E'
-		self.agent_location = (0, 0)
-		self.agent_orientation = 'E'
+class Agent():
+	def __init__(self, born_at=(0, 0), facing='E', show=True, drawing_manager=None):
+		# save parameters and don't change after init
+		self.born_at = born_at
+		self.born_facing = facing
+		self.drawing_manager = drawing_manager
 
+		# current location and facing, reset after each episode
+		self.cur_at = born_at
+		self.cur_facing = facing
+
+		# credit
+		self._credit = 0
+
+		# whether agent is displayed on screen
+		self._show = show
+
+		# bag that stores objects this agent picked up
+		self.bag = []
+
+	def _angle_from_facing(self, facing):
+		angle = {'N':90, 'S':270, 'W':180, 'E':0}
+		return angle[facing]
+
+	def reset(self):
+		self.cur_at = self.born_at
+		self.cur_facing = self.facing
+
+		if self.show == True:
+			angle = self._angle_from_facing(self.cur_facing)
+			self.drawing_manager.remove_agent()
+			self.drawing_manager.draw_agent(self.cur_at, angle)
+
+			# delete previous traces so we don't mess up the environment
+			self.drawing_manager.delete_trace()
+
+	def one_step_to(self, to_index, facing):
+		if self.show == True:
+			angle = self._angle_from_facing(facing)
+			if self.cur_facing != facing:
+				self.drawing_manager.rotate_agent(self.cur_at, angle)
+			if self.cur_at != to_index:
+				self.drawing_manager.move_agent(self.cur_at, to_index)
+				self.drawing_manager.draw_trace(self.cur_at, angle)
+
+		self.cur_at = to_index
+		self.cur_facing = facing
+
+	def pickup(self, obj):
+		self.bag.append(obj)
+		self.credit += obj.reward
+
+	def drop(self):
+		objs = self.bag
+		self.bag = []
+		self.credit = 0
+		return objs
+
+	@property
+	def credit(self):
+		return self._credit
+
+	@credit.setter
+	def credit(self, value):
+		self._credit = value
+
+	@property
+	def at(self):
+		return self.cur_at
+
+	@at.setter
+	def at(self, where):
+		self.cur_at = where
+	
+	@property
+	def facing(self):
+		return self.cur_facing
+
+	@facing.setter
+	def facing(self, orientation):
+		self.cur_facing = orientation
+
+	@property
+	def show(self):
+		return self._show
+
+	@show.setter
+	def show(self, onoff):
+		self._show = onoff
+
+	@property
+	def bag_of_objects(self):
+		return self.bag
+
+
+class Env():
+	def __init__(self, grid_dimension=(10, 10), cell_size=(120, 90), default_rewards=0, agent_born_at=(0, 0), agent_born_facing='E'):
 		# create grid and add data to it
 		self.grid = Grid(grid_dimension)
 		self.grid.cells = [None] * self.grid.n_cells
@@ -81,12 +167,19 @@ class Env():
 		# draw grid
 		self.drawing_manager.draw_grid()
 
-		self.reset()
 		self.default_rewards = default_rewards
+
+		# create agent and set its born location and facing direction
+		self.agent = Agent(agent_born_at, agent_born_facing, drawing_manager=self.drawing_manager)
 
 	def train(self, plugin, n_episodes, delay_per_step=0, show=True):
 		assert plugin != None
 		assert n_episodes > 0
+
+		# turn on/off agent display on screen
+		# turn off agent display sometimes can massively reduce training time
+		show_old = self.agent.show
+		self.agent.show = show
 
 		preset_states = []
 		for obj in self.grid.cells:
@@ -98,14 +191,14 @@ class Env():
 		# notify plugin environment layout and query plugin to show some info
 		plugin.layout(1, action_space, preset_states)
 		for cell_id in range(self.grid.n_cells):
-			self.show_action_values(cell_id, plugin)
+			self._show_action_values(cell_id, plugin)
 
 		for episode in range(n_episodes):
-			self.reset(show)  # reset agent's location
+			self.reset()  # reset agent's location
 			time.sleep(delay_per_step)
 
 			#print("training episode {} ...".format(episode))
-			state = self.grid.insure_id(self.agent_location)  # starting state
+			state = self.grid.insure_id(self.agent.at)  # starting state
 			action = plugin.episode_start(episode, state)
 
 			is_terminal = False
@@ -113,7 +206,7 @@ class Env():
 				#action = plugin.next_action(state_next)  # query plugin for next action
 
 				# tell environment what action to move
-				reward, state_next, is_terminal = self.step(action, show)
+				reward, state_next, is_terminal = self.step(action)
 				time.sleep(delay_per_step)
 
 				# notify plugin this step
@@ -121,11 +214,14 @@ class Env():
 
 				# try to show some info on grid, the info to show is decided by plugin
 				if show == True:
-					self.show_action_values(state, plugin)
+					self._show_action_values(state, plugin)
 
 				state = state_next
 
 			plugin.episode_end()
+
+		# restore show property
+		self.agent.show = show_old
 
 	def test(self, plugin, n_episodes=1, delay_per_step=0.5, only_exploitation=True):
 		assert plugin != None
@@ -140,14 +236,15 @@ class Env():
 			self.reset()  # reset agent's location
 			time.sleep(delay_per_step)
 		
-			state_next = self.grid.insure_id(self.agent_location)  # starting state
+			state_next = self.grid.insure_id(self.agent.at)  # starting state
 			is_terminal = False
 			while is_terminal == False:
 				action = query_function(state_next)
 				reward, state_next, is_terminal = self.step(action)
 				time.sleep(delay_per_step)
 
-	def all_object_types(self):
+	@property
+	def object_types(self):
 		return ['red_ball', 'yellow_star', 'gray_box', 'pacman'] 
 
 	@property
@@ -155,13 +252,11 @@ class Env():
 		return ['N', 'S', 'W', 'E']
 
 	def add_object(self, obj_type, index_or_id, reward=0, value=0, terminal=False, pickable=False):
-		"""Add an object to a grid cell. Currently only one object is allowed per grid cell.
+		"""Add an object to a grid cell. currently only one object is allowed per grid cell.
 		parameters:
 			obj_type:  object type, a string specifing what type of object to be drawn
 			index_or_id:  grid cell index(row, column), or a single non-negative integer
 		"""
-		dm = self.drawing_manager
-		assert dm != None
 
 		# create an object and attach it to grid
 		obj = GridObject(obj_type, index_or_id, reward, value, terminal, pickable, drawing_manager=self.drawing_manager)
@@ -170,26 +265,34 @@ class Env():
 		# draw object
 		obj.draw()
 
-	def remove_object(self, obj_type, index_or_id):
-		obj = self.grid.cell_at(index_or_id)
+	def restore_object(self, obj):
+		# attach object to cell and draw
+		self.grid.set_cell(obj.index_or_id, obj)
+		obj.draw()
+
+	def remove_object(self, index_or_id):
+		obj = self.object_at(index_or_id)
 		if obj != None:
 			obj.remove()
 			self.grid.set_cell(index_or_id, None)
 
+	def object_at(self, index_or_id):
+		return self.grid.cell_at(index_or_id)
+
 	def set_walls(self, walls):
 		for wall in walls:
 			wall = self.grid.insure_index(wall)
-			if self.is_hit_wall(wall) == False:
+			if self._is_hit_wall(wall) == False:
 				self.walls.append(wall)
 
-	def is_hit_wall(self, index_or_id):
+	def _is_hit_wall(self, index_or_id):
 		cell_index = self.grid.insure_index(index_or_id)
 		for wall in self.walls:
 			if cell_index == wall:
 				return True
 		return False
 
-	def show_action_values(self, index_or_id, plugin):
+	def _show_action_values(self, index_or_id, plugin):
 		assert plugin != None
 		state = self.grid.insure_id(index_or_id)
 		action_values_dict = plugin.get_action_values_dict(state)
@@ -200,96 +303,57 @@ class Env():
 			action_values_dict[action] = str(int(value))
 		self.drawing_manager.draw_text(index_or_id, action_values_dict)
 		
-	#def show_text(self, index_or_id, text):
-	#	if text == None:
-	#		return
-
-	#	if isinstance(text, (list, tuple)) == True:
-	#		text_list = []
-	#		for action, word in enumerate(text):
-	#			if action == Env.N:
-	#				action = tk.N
-	#			elif action == Env.S:
-	#				action = tk.S
-	#			elif action == Env.W:
-	#				action = tk.W
-	#			elif action == Env.E:
-	#				action = tk.E
-	#			else:
-	#				assert False
-
-	#			text_list.append((word, action))
-	#		self.drawing_manager.draw_text_list(index_or_id, text_list)
-	#	else:	
-	#		self.drawing_manager.draw_on_cell(index_or_id, text=text)
-		
-	def angle_from_orientation(self, ori):
-		angle = {"N":90, "S":270, "W":180, "E":0}
-
-		return angle[ori]
-
-	def reset(self, show=True):
-		self.agent_location = (0, 0)
-		self.agent_orientation = 'E'
-
-		angle = self.angle_from_orientation(self.agent_orientation)
-
-		if show == True:
-			self.drawing_manager.remove_agent()
-			self.drawing_manager.draw_agent(self.agent_location, angle)
-			# delete previous traces so we don't mess up the environment
-			self.drawing_manager.delete_trace()
-		
-	def _move_by_orders(self, from_index, actions, walls=None):
+	def _move_by_orders(self, from_index, actions):
 		move = {"N":(-1, 0), "S":(1, 0), "W":(0, -1), "E":(0, 1)}
 		destination = np.array(from_index)
 		index_next = np.array(from_index)
+
+		if isinstance(actions, (list, tuple)) == False:
+			actions = [actions]
+			
 		for action in actions:
 			index_next += np.array(move[action])
-			if self.is_hit_wall((int(index_next[0]), int(index_next[1]))) == True:
+			if self._is_hit_wall((int(index_next[0]), int(index_next[1]))) == True:
 				break
 			else:
 				destination += np.array(move[action])
 
 		return (int(destination[0]), int(destination[1]))
 
-	def step(self, action, show=True):
-		index = self.agent_location
-		index_new = self._move_by_orders(index, [action], self.walls)
+	def step(self, action):
+		cur_index = self.agent.at
+		next_index = self._move_by_orders(cur_index, action)
 
-		angle = self.angle_from_orientation(action)
-		# rotate agent if its orientation changed, even if it's not moving
-		if self.agent_orientation != action and show == True:
-			self.drawing_manager.rotate_agent(index, angle)
+		self.agent.one_step_to(next_index, action)
 
-		# move agent to its new location
-		if index_new != index and show == True:
-			self.drawing_manager.move_agent(index, index_new)
-			self.drawing_manager.draw_trace(index, angle)
+		obj = self.object_at(cur_index)
+		if obj != None:
+			reward = obj.reward
+		else:
+			reward = self.default_rewards
 
-		self.agent_location = index_new
-		self.agent_orientation = action
+		state_next = self.grid.insure_id(next_index)
+		obj = self.object_at(next_index)
+		if obj != None:
+			terminal = obj.terminal
 
-		cur_obj = self.grid.cell_at(index)
-		reward = cur_obj.reward if cur_obj != None else self.default_rewards
+			# if this object is pickable, let agent pick it up
+			if obj.pickable == True:
+				self.agent.pickup(obj)
+				self.remove_object(next_index)
+		else:
+			terminal = False
 
-		state_next = self.grid.insure_id(index_new)
-		next_obj = self.grid.cell_at(index_new)
-		terminal = next_obj.terminal if next_obj != None else False
+		if terminal == True:
+			reward += self.agent.credit
+			bag_of_objects = self.agent.drop()
+			for obj in bag_of_objects:
+				self.restore_object(obj)
 
 		return (reward, state_next, terminal)
 
-	#def walk_by_orders(self, action_list):
-	#	self.reset()
-	#	for action in action_list:
-	#		self.step(action)
-
-	# setup the layout of environment
-	# you can experiment algorithms by changing this 'layout'
-	#def set_layout(self):
-	#	self.add_object((6, 6), value=100)
-	#	self.add_object((8, 8), value=10)
-	#	self.add_object((6, 7), value=10)
+	def reset(self):
+		self.agent.reset()
 
 
 if __name__ == '__main__':
@@ -300,7 +364,7 @@ if __name__ == '__main__':
 
 	# set the environment
 	env = Env((8, 8), (120, 90), default_rewards=0)
-	env.add_object('red_ball', (3, 3), value=100, terminal=True)
+	env.add_object('yellow_star', (3, 3), reward=100, pickable=True)
 	env.add_object('red_ball', (5, 6), value=200, terminal=True)
 	#env.add_object((3, 5), value=-100, is_terminal=True)
 	#env.add_object((5, 3), value=-100, is_terminal=True)
@@ -311,7 +375,7 @@ if __name__ == '__main__':
 	# test for TD learning algorithms
 	# hyperparameters
 	alpha = 0.1
-	gamma = 1
+	gamma = 0.99
 	epsilon = 0.5
 	lambda_ = 0.7
 	n_episodes = 1000
@@ -326,5 +390,5 @@ if __name__ == '__main__':
 	#env.test(plugin, 100, only_exploitation=False)
 
 	print("end ...")
-	env.remove_object('red_solid_circle', (3, 3))
+	#env.remove_object((3, 3))
 
