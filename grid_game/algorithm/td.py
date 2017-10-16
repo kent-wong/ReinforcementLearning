@@ -28,6 +28,7 @@ class TD():
 		delta = self.alpha * (target - predict)
 
 		# if TD(0), won't bother to record eligibility
+		# so we can just use this function to learn in case of TD(0)
 		if self.eligibility == 0:
 			self.update_func(state, action, delta)
 		else:

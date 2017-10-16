@@ -53,8 +53,8 @@ class AlgPlugin():
 	def episode_start(self, episode, starting_state):
 		print("episode_start() is called, with arguments:", episode, starting_state)
 
-	def one_step(self, state, action, reward, state_next, is_terminal):
-		print("one_step() is called, with arguments:", state, action, reward, state_next, is_terminal)
+	def one_step(self, state, action, reward, state_next):
+		print("one_step() is called, with arguments:", state, action, reward, state_next)
 
 	def episode_end(self):
 		print("episode_end() is called")

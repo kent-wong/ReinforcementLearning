@@ -8,6 +8,7 @@ from grid import Grid
 from drawing import DrawingManager
 sys.path.append('./algorithm')
 from alg_plugin import ActionSpace
+from memory import Memory
 
 
 class GridObject():
@@ -52,7 +53,7 @@ class GridObject():
 
 
 class Agent():
-	def __init__(self, born_at=(0, 0), facing='E', show=True, drawing_manager=None):
+	def __init__(self, born_at=(0, 0), facing='E', drawing_manager=None):
 		# save parameters and don't change after init
 		self.born_at = born_at
 		self.born_facing = facing
@@ -65,9 +66,6 @@ class Agent():
 		# credit
 		self._credit = 0
 
-		# whether agent is displayed on screen
-		self._show = show
-
 		# bag that stores objects this agent picked up
 		self.bag = []
 
@@ -75,11 +73,11 @@ class Agent():
 		angle = {'N':90, 'S':270, 'W':180, 'E':0}
 		return angle[facing]
 
-	def reset(self):
+	def reset(self, show=True):
 		self.cur_at = self.born_at
 		self.cur_facing = self.facing
 
-		if self.show == True:
+		if show == True:
 			angle = self._angle_from_facing(self.cur_facing)
 			self.drawing_manager.remove_agent()
 			self.drawing_manager.draw_agent(self.cur_at, angle)
@@ -87,8 +85,8 @@ class Agent():
 			# delete previous traces so we don't mess up the environment
 			self.drawing_manager.delete_trace()
 
-	def one_step_to(self, to_index, facing):
-		if self.show == True:
+	def one_step_to(self, to_index, facing, show=True):
+		if show == True:
 			angle = self._angle_from_facing(facing)
 			if self.cur_facing != facing:
 				self.drawing_manager.rotate_agent(self.cur_at, angle)
@@ -101,6 +99,7 @@ class Agent():
 
 	def pickup(self, obj):
 		self.bag.append(obj)
+		self.credit *= 10
 		self.credit += obj.reward
 
 	def drop(self):
@@ -134,14 +133,6 @@ class Agent():
 		self.cur_facing = orientation
 
 	@property
-	def show(self):
-		return self._show
-
-	@show.setter
-	def show(self, onoff):
-		self._show = onoff
-
-	@property
 	def bag_of_objects(self):
 		return self.bag
 
@@ -169,76 +160,165 @@ class Env():
 
 		self.default_rewards = default_rewards
 
+		# create an action space
+		self.action_space = ActionSpace(self.env_actions)
+
 		# create agent and set its born location and facing direction
 		self.agent = Agent(agent_born_at, agent_born_facing, drawing_manager=self.drawing_manager)
 
-	def train(self, plugin, n_episodes, delay_per_step=0, show=True):
-		assert plugin != None
-		assert n_episodes > 0
+		# create memory for learning from old experience
+		self.history = Memory(2000)
 
-		# turn on/off agent display on screen
-		# turn off agent display sometimes can massively reduce training time
-		show_old = self.agent.show
-		self.agent.show = show
+		# keep counts of access times for each cell
+		self.access_counter = Grid(grid_dimension)
+		self.access_counter.cells = [0] * self.access_counter.n_cells
 
-		preset_states = []
-		for obj in self.grid.cells:
-			if obj != None and obj.value != 0:
-				state = self.grid.insure_id(obj.index_or_id)
-				preset_states.append((state, obj.value, obj.terminal))
+		# whether environment changes should be displayed on screen
+		self._show = True
 
-		action_space = ActionSpace(self.env_actions)
-		# notify plugin environment layout and query plugin to show some info
-		plugin.layout(1, action_space, preset_states)
-		for cell_id in range(self.grid.n_cells):
-			self._show_action_values(cell_id, plugin)
+	@property
+	def show(self):
+		return self._show
 
-		for episode in range(n_episodes):
-			self.reset()  # reset agent's location
-			time.sleep(delay_per_step)
+	@show.setter
+	def show(self, onoff):
+		self._show = onoff
 
-			#print("training episode {} ...".format(episode))
-			state = self.grid.insure_id(self.agent.at)  # starting state
-			action = plugin.episode_start(episode, state)
+	def calc_state(self):
+		factor = self.grid.n_cells
+		state = self.grid.insure_id(self.agent.cur_at)
+		for obj in self.agent.bag_of_objects:
+			cell_id = self.grid.insure_id(obj.index_or_id)
+			state += cell_id * factor
+
+		return state
+		
+	def index_from_state(self, state):
+		factor = self.grid.n_cells
+		cell_id = state % factor
+		index = self.grid.insure_index(cell_id)
+		return index
+
+	def increase_access_counter(self, index_or_id):
+		counter = self.access_counter.cell_at(index_or_id)
+		counter += 1
+		self.access_counter.set_cell(index_or_id, counter)
+
+	def _show_one_counter(self, cell_id, value):
+		self.drawing_manager.delete_text(cell_id)
+		counter = str(value)
+		self.drawing_manager.draw_text(cell_id, {'C':counter})
+
+	def show_access_counters(self):
+		self.access_counter.foreach(self._show_one_counter)
+
+		#for cell_id in self.access_counter.n_cells:
+		#	drawing_manager.delete_text(cell_id)
+		#	counter = self.access_counter.cell_at(cell_id)
+		#	counter = str(counter)
+		#	drawing_manager.draw_text(cell_id, {'C':counter})
+
+	def record_experience(self, state, action, reward, state_next):
+		self.history.add((state, action, reward, state_next))
+
+	def learn_from_experience(self, rl_algorithm, times=200):
+		experience = self.history.random_choice(times)
+		for s, a, r, s_ in experience:
+			rl_algorithm.one_step(s, a, r, s_)
+
+	def pretrain(self):
+		self.agent.show = False
+		
+		while self.history.is_full == False:
+			self.reset()
+			state = self.calc_state()
+			action = self.action_space.random_sample()
 
 			is_terminal = False
 			while is_terminal == False:
-				#action = plugin.next_action(state_next)  # query plugin for next action
-
-				# tell environment what action to move
 				reward, state_next, is_terminal = self.step(action)
+				# record experience
+				self.record_experience(state, action, reward, state_next)
+
+				state = state_next
+				action = self.action_space.random_sample()
+				
+		self.agent.show = True
+		self.reset()
+
+	def train(self, rl_algorithm, n_episodes, delay_per_step=0):
+		assert rl_algorithm != None
+		assert n_episodes > 0
+
+		# pretrain to fullfil memory
+		self.pretrain()
+
+		preset_states = []
+		#for obj in self.grid.cells:
+		#	if obj != None and obj.value != 0:
+		#		state = self.grid.insure_id(obj.index_or_id)
+		#		preset_states.append((state, obj.value, obj.terminal))
+
+		# notify rl_algorithm environment layout and query rl_algorithm to show some info
+		rl_algorithm.layout(1, self.action_space, preset_states)
+
+		#for cell_id in range(self.grid.n_cells):
+		#	self._show_action_values(cell_id, rl_algorithm)
+
+		for episode in range(n_episodes):
+			# reset agent's location at beginning of each episode
+			self.reset()
+			time.sleep(delay_per_step)
+
+			if episode % 100 == 0:
+				print("training episode {}".format(episode))
+
+			state = self.calc_state()
+			action = rl_algorithm.episode_start(episode, state)
+
+			end = False
+			while end == False:
+				# tell environment what action to move
+				reward, state_next, end = self.step(action)
 				time.sleep(delay_per_step)
 
-				# notify plugin this step
-				action = plugin.one_step(state, action, reward, state_next, is_terminal)
+				# notify rl_algorithm this step
+				action = rl_algorithm.one_step(state, action, reward, state_next)
 
-				# try to show some info on grid, the info to show is decided by plugin
-				if show == True:
-					self._show_action_values(state, plugin)
+				# record this step as experience for later learning
+				#self.record_experience(state, action, reward, state_next)
+
+				# display value for each action
+				if self.show:
+					self._show_all_action_values(state, rl_algorithm)
 
 				state = state_next
 
-			plugin.episode_end()
+			rl_algorithm.episode_end()
 
-		# restore show property
-		self.agent.show = show_old
+			# learn from experience
+			#self.learn_from_experience(rl_algorithm)
 
-	def test(self, plugin, n_episodes=1, delay_per_step=0.5, only_exploitation=True):
-		assert plugin != None
+
+	def test(self, rl_algorithm, n_episodes=1, delay_per_step=0.5, only_exploitation=True):
+		assert rl_algorithm != None
 		assert n_episodes > 0
 
 		if only_exploitation == True:
-			query_function = plugin.best_action
+			query_function = rl_algorithm.best_action
 		else:
-			query_function = plugin.next_action
+			query_function = rl_algorithm.next_action
 
 		for episode in range(n_episodes):
 			self.reset()  # reset agent's location
 			time.sleep(delay_per_step)
 		
-			state_next = self.grid.insure_id(self.agent.at)  # starting state
+			#state_next = self.grid.insure_id(self.agent.at)  # starting state
+			state_next = self.calc_state()
+
 			is_terminal = False
 			while is_terminal == False:
+				self._show_all_action_values(state_next, rl_algorithm)
 				action = query_function(state_next)
 				reward, state_next, is_terminal = self.step(action)
 				time.sleep(delay_per_step)
@@ -261,20 +341,21 @@ class Env():
 		# create an object and attach it to grid
 		obj = GridObject(obj_type, index_or_id, reward, value, terminal, pickable, drawing_manager=self.drawing_manager)
 		self.grid.set_cell(index_or_id, obj)
-
-		# draw object
-		obj.draw()
+		if self.show:
+			obj.draw()  # draw object
 
 	def restore_object(self, obj):
 		# attach object to cell and draw
 		self.grid.set_cell(obj.index_or_id, obj)
-		obj.draw()
+		if self.show:
+			obj.draw()  # draw object
 
 	def remove_object(self, index_or_id):
 		obj = self.object_at(index_or_id)
 		if obj != None:
-			obj.remove()
 			self.grid.set_cell(index_or_id, None)
+			if self.show:
+				obj.remove()
 
 	def object_at(self, index_or_id):
 		return self.grid.cell_at(index_or_id)
@@ -292,17 +373,26 @@ class Env():
 				return True
 		return False
 
-	def _show_action_values(self, index_or_id, plugin):
-		assert plugin != None
-		state = self.grid.insure_id(index_or_id)
-		action_values_dict = plugin.get_action_values_dict(state)
+	def _show_action_values(self, state, rl_algorithm):
+		assert rl_algorithm != None
+
+		index = self.index_from_state(state)
+		action_values_dict = rl_algorithm.get_action_values_dict(state)
 		if action_values_dict == None:
 			return
 
 		for action, value in action_values_dict.items():
 			action_values_dict[action] = str(int(value))
-		self.drawing_manager.draw_text(index_or_id, action_values_dict)
+		self.drawing_manager.draw_text(index, action_values_dict)
 		
+	def _show_all_action_values(self, state, rl_algorithm):
+		factor = self.grid.n_cells
+		state_base = state // factor
+		state_base *= factor
+
+		for i in range(factor):
+			self._show_action_values(state_base+i, rl_algorithm)
+
 	def _move_by_orders(self, from_index, actions):
 		move = {"N":(-1, 0), "S":(1, 0), "W":(0, -1), "E":(0, 1)}
 		destination = np.array(from_index)
@@ -324,7 +414,9 @@ class Env():
 		cur_index = self.agent.at
 		next_index = self._move_by_orders(cur_index, action)
 
-		self.agent.one_step_to(next_index, action)
+		self.increase_access_counter(cur_index)
+
+		self.agent.one_step_to(next_index, action, self.show)
 
 		obj = self.object_at(cur_index)
 		if obj != None:
@@ -332,17 +424,18 @@ class Env():
 		else:
 			reward = self.default_rewards
 
-		state_next = self.grid.insure_id(next_index)
 		obj = self.object_at(next_index)
 		if obj != None:
 			terminal = obj.terminal
-
 			# if this object is pickable, let agent pick it up
 			if obj.pickable == True:
 				self.agent.pickup(obj)
 				self.remove_object(next_index)
 		else:
 			terminal = False
+
+		# notice: calculate state only after agent move a step and (possibly)pick up object
+		state_next = self.calc_state()
 
 		if terminal == True:
 			reward += self.agent.credit
@@ -353,7 +446,7 @@ class Env():
 		return (reward, state_next, terminal)
 
 	def reset(self):
-		self.agent.reset()
+		self.agent.reset(self.show)
 
 
 if __name__ == '__main__':
@@ -363,13 +456,16 @@ if __name__ == '__main__':
 	from sarsa import Sarsa
 
 	# set the environment
-	env = Env((8, 8), (120, 90), default_rewards=0)
-	env.add_object('yellow_star', (3, 3), reward=100, pickable=True)
-	env.add_object('red_ball', (5, 6), value=200, terminal=True)
-	#env.add_object((3, 5), value=-100, is_terminal=True)
-	#env.add_object((5, 3), value=-100, is_terminal=True)
-	#env.add_object((6, 4), value=100, is_terminal=True)
-	#env.add_object((1, 5), value=1000)
+	env = Env((8, 8), (130, 90), default_rewards=0)
+	star_credit = 1
+	env.add_object('yellow_star', (3, 3), reward=star_credit, pickable=True)
+	env.add_object('yellow_star', (7, 1), reward=star_credit, pickable=True)
+	#env.add_object('yellow_star', (0, 7), reward=star_credit, pickable=True)
+	env.add_object('yellow_star', (5, 7), reward=star_credit, pickable=True)
+	env.add_object('yellow_star', (6, 6), reward=star_credit, pickable=True)
+	env.add_object('yellow_star', (5, 5), reward=star_credit, pickable=True)
+	env.add_object('yellow_star', (4, 6), reward=star_credit, pickable=True)
+	env.add_object('red_ball', (5, 6), value=0, terminal=True)
 
 
 	# test for TD learning algorithms
@@ -378,16 +474,21 @@ if __name__ == '__main__':
 	gamma = 0.99
 	epsilon = 0.5
 	lambda_ = 0.7
-	n_episodes = 1000
+	n_episodes = 20000
 
-	plugin = QLearning(alpha, gamma, epsilon)
-	print(GridObject.__doc__)
-	#plugin = Sarsa(alpha, gamma, lambda_, epsilon)
-	env.train(plugin, n_episodes, delay_per_step=0, show=True)
+	rl_algorithm = QLearning(alpha, gamma, epsilon)
+	#rl_algorithm = Sarsa(alpha, gamma, lambda_, epsilon)
+
+	env.show = False
+	print("training ...")
+	env.train(rl_algorithm, n_episodes, delay_per_step=0)
+	env.show = True
+
+	#env.show_access_counters()
 
 	print("agent is now walking ...")
-	env.test(plugin)
-	#env.test(plugin, 100, only_exploitation=False)
+	env.test(rl_algorithm)
+	#env.test(rl_algorithm, 100, only_exploitation=False)
 
 	print("end ...")
 	#env.remove_object((3, 3))

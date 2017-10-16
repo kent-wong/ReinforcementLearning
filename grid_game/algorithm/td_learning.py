@@ -66,7 +66,10 @@ class TDLearning(AlgPlugin):
 		self.td.episode_start(state)
 		return self.next_action(state)
 
-	def one_step(self, state, action, reward, state_next, terminal):
+	def one_step(self, state, action, reward, state_next):
+		if self.qtable.get(state) == None:
+			self.qtable[state] = [0] * self.action_space.n_actions
+
 		if self.qtable.get(state_next) == None:
 			self.qtable[state_next] = [0] * self.action_space.n_actions
 

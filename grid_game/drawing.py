@@ -132,10 +132,10 @@ class DrawingManager(threading.Thread):
 		self.canvas.addtag_withtag(tag_of_this_type, tag)
 
 		# wk_debug
-		print("tag:", self.canvas.find_withtag(tag))
-		print("tag_of_cell:", self.canvas.find_withtag(tag_of_this_type))
-		print("non-exist-tag:", self.canvas.find_withtag("abcdefg"))
-		print("non-exist-tag len:", len(self.canvas.find_withtag("abcdefg")))
+		#print("tag:", self.canvas.find_withtag(tag))
+		#print("tag_of_cell:", self.canvas.find_withtag(tag_of_this_type))
+		#print("non-exist-tag:", self.canvas.find_withtag("abcdefg"))
+		#print("non-exist-tag len:", len(self.canvas.find_withtag("abcdefg")))
 
 		return canvas_id
 
@@ -154,34 +154,7 @@ class DrawingManager(threading.Thread):
 	def delete_objects_on_cell(self, index_or_id):
 		cell_id = self.grid.insure_id(index_or_id)
 		tag_of_cell = str(cell_id) + '_cell_id'
-
-		# wk_debug
-		print(self.canvas.find_withtag(tag_of_cell))
-
 		self.canvas.delete(tag_of_cell)
-
-#	def draw_on_cell(self, index_or_id, image=None, text=None):
-#		cell_id = self.grid.insure_id(index_or_id)
-#		bbox = self.bounding_box(index_or_id)
-#		draw_info = self.grid.cell(index_or_id)
-#
-#		if image != None:
-#			tag = 'image' + str(cell_id)
-#			self.canvas.delete(tag)
-#			canvas_id = draw_func_list[image](self.canvas, bbox)
-#			self.canvas.addtag_withtag(tag, canvas_id)
-#
-#		if text != None:
-#			tag = 'text' + str(cell_id)
-#			self.canvas.delete(tag)
-#			canvas_id = draw_text(self.canvas, bbox, text, anchor=tk.CENTER)
-#			self.canvas.addtag_withtag(tag, canvas_id)
-#
-#	def clear_on_cell(self, index_or_id):
-#		cell_id = self.grid.insure_id(index_or_id)
-#		self.canvas.delete('image' + str(cell_id))
-#		self.canvas.delete('text' + str(cell_id))
-#		self.canvas.delete('text_list' + str(cell_id))
 
 	def draw_text(self, index_or_id, text_dict):
 		bbox = self.bounding_box(index_or_id)
@@ -194,7 +167,11 @@ class DrawingManager(threading.Thread):
 			canvas_id = draw_text(self.canvas, bbox, text, anchor_dict[anchor])
 			self.canvas.addtag_withtag(tag, canvas_id)
 		
-
+	def delete_text(self, index_or_id):
+		cell_id = self.grid.insure_id(index_or_id)
+		tag = 'text_' + str(cell_id)
+		self.canvas.delete(tag)
+		
 	def draw_text_list(self, index_or_id, text_anchor_list):
 		bbox = self.bounding_box(index_or_id)
 		cell_id = self.grid.insure_id(index_or_id)
