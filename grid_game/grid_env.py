@@ -22,14 +22,19 @@ class GridObject():
 		self._value = value
 		self._terminal = terminal
 		self._pickable = pickable
+	
+		self._label = None
 
 	def draw(self):
 		if self.drawing_manager != None:
-			return self.drawing_manager.draw_object(self.obj_type, self.index_or_id)
+			self.drawing_manager.draw_object(self.obj_type, self.index_or_id)
+			if self.label != None:
+				self.drawing_manager.draw_text(self.index_or_id, {'C':self.label})
 
 	def remove(self):
 		if self.drawing_manager != None:
-			return self.drawing_manager.delete_object(self.obj_type, self.index_or_id)
+			self.drawing_manager.delete_object(self.obj_type, self.index_or_id)
+			self.drawing_manager.delete_text(self.index_or_id)
 
 	def is_on_cell(self):
 		if self.drawing_manager != None:
@@ -51,12 +56,22 @@ class GridObject():
 	def reward(self):
 		return self._reward
 
+	@property
+	def label(self):
+		return self._label
+
+	@label.setter
+	def label(self, text):
+		self._label = text
+		if text != None:
+			self.drawing_manager.draw_text(self.index_or_id, {'C':text})
+
 
 class Agent():
 	def __init__(self, born_at=(0, 0), facing='E', drawing_manager=None):
 		# save parameters and don't change after init
-		self.born_at = born_at
-		self.born_facing = facing
+		self._born_at = born_at
+		self._born_facing = facing
 		self.drawing_manager = drawing_manager
 
 		# current location and facing, reset after each episode
@@ -68,6 +83,9 @@ class Agent():
 
 		# bag that stores objects this agent picked up
 		self.bag = []
+
+		# wk_debug
+		self.pickup_all = 0
 
 	def _angle_from_facing(self, facing):
 		angle = {'N':90, 'S':270, 'W':180, 'E':0}
@@ -99,8 +117,15 @@ class Agent():
 
 	def pickup(self, obj):
 		self.bag.append(obj)
-		self.credit *= 10
-		self.credit += obj.reward
+
+		# wk_debug
+		#self.credit *= 10
+		#self.credit += obj.reward
+
+		items = len(self.bag)
+		if items == 8:
+			self.credit = 10000
+			self.pickup_all += 1
 
 	def drop(self):
 		objs = self.bag
@@ -136,6 +161,28 @@ class Agent():
 	def bag_of_objects(self):
 		return self.bag
 
+	@property
+	def born_at(self):
+		return self._born_at
+
+	@born_at.setter
+	def born_at(self, where):
+		if where is None:
+			where = (0, 0)  # default
+		self._born_at = where
+		self.reset()  # set current location to the born place and redraw agent
+
+	@property
+	def born_facing(self):
+		return self._born_facing
+
+	@born_facing.setter
+	def born_facing(self, facing):
+		if facing is None:
+			facing = 'E'
+		self._born_facing = facing
+		self.reset()
+
 
 class Env():
 	def __init__(self, grid_dimension=(10, 10), cell_size=(120, 90), default_rewards=0, agent_born_at=(0, 0), agent_born_facing='E'):
@@ -165,6 +212,7 @@ class Env():
 
 		# create agent and set its born location and facing direction
 		self.agent = Agent(agent_born_at, agent_born_facing, drawing_manager=self.drawing_manager)
+		self.agent.reset()
 
 		# create memory for learning from old experience
 		self.history = Memory(2000)
@@ -186,11 +234,13 @@ class Env():
 
 	def calc_state(self):
 		factor = self.grid.n_cells
-		state = self.grid.insure_id(self.agent.cur_at)
+		state = 0
 		for obj in self.agent.bag_of_objects:
-			cell_id = self.grid.insure_id(obj.index_or_id)
-			state += cell_id * factor
+			cell_id = self.grid.insure_id(obj.index_or_id) + 1
+			state += cell_id
+			state *= factor
 
+		state += self.grid.insure_id(self.agent.cur_at)
 		return state
 		
 	def index_from_state(self, state):
@@ -251,7 +301,7 @@ class Env():
 		assert n_episodes > 0
 
 		# pretrain to fullfil memory
-		self.pretrain()
+		#self.pretrain()
 
 		preset_states = []
 		#for obj in self.grid.cells:
@@ -265,13 +315,17 @@ class Env():
 		#for cell_id in range(self.grid.n_cells):
 		#	self._show_action_values(cell_id, rl_algorithm)
 
+		#rl_algorithm.delayed_learning = True
 		for episode in range(n_episodes):
 			# reset agent's location at beginning of each episode
 			self.reset()
 			time.sleep(delay_per_step)
 
-			if episode % 100 == 0:
+			if episode % 200 == 0:
 				print("training episode {}".format(episode))
+
+			if episode % 10 == 0:
+				rl_algorithm.delayed_learning_catchup()
 
 			state = self.calc_state()
 			action = rl_algorithm.episode_start(episode, state)
@@ -284,6 +338,16 @@ class Env():
 
 				# notify rl_algorithm this step
 				action = rl_algorithm.one_step(state, action, reward, state_next)
+
+				# wk_debug
+				#if reward > 0:
+					#print("reward: {}, state: {}, end is {}".format(reward, state, end))
+
+				# wk_debug
+				#if reward > 0:
+				#	action = rl_algorithm.one_step(state, action, reward, state_next)
+				#else:
+				#	action = rl_algorithm.next_action(state_next)
 
 				# record this step as experience for later learning
 				#self.record_experience(state, action, reward, state_next)
@@ -299,17 +363,21 @@ class Env():
 			# learn from experience
 			#self.learn_from_experience(rl_algorithm)
 
+		rl_algorithm.delayed_learning = False
 
-	def test(self, rl_algorithm, n_episodes=1, delay_per_step=0.5, only_exploitation=True):
+
+	def test(self, rl_algorithm, repeat=True, delay_per_step=0.5, only_exploitation=True):
 		assert rl_algorithm != None
-		assert n_episodes > 0
 
 		if only_exploitation == True:
 			query_function = rl_algorithm.best_action
 		else:
 			query_function = rl_algorithm.next_action
 
-		for episode in range(n_episodes):
+		looping = True  # at least loop once
+		while looping:
+			looping = repeat
+
 			self.reset()  # reset agent's location
 			time.sleep(delay_per_step)
 		
@@ -344,6 +412,8 @@ class Env():
 		if self.show:
 			obj.draw()  # draw object
 
+		return obj
+
 	def restore_object(self, obj):
 		# attach object to cell and draw
 		self.grid.set_cell(obj.index_or_id, obj)
@@ -356,6 +426,8 @@ class Env():
 			self.grid.set_cell(index_or_id, None)
 			if self.show:
 				obj.remove()
+
+		return obj
 
 	def object_at(self, index_or_id):
 		return self.grid.cell_at(index_or_id)
@@ -457,24 +529,63 @@ if __name__ == '__main__':
 
 	# set the environment
 	env = Env((8, 8), (130, 90), default_rewards=0)
-	star_credit = 1
-	env.add_object('yellow_star', (3, 3), reward=star_credit, pickable=True)
-	env.add_object('yellow_star', (7, 1), reward=star_credit, pickable=True)
-	#env.add_object('yellow_star', (0, 7), reward=star_credit, pickable=True)
-	env.add_object('yellow_star', (5, 7), reward=star_credit, pickable=True)
-	env.add_object('yellow_star', (6, 6), reward=star_credit, pickable=True)
-	env.add_object('yellow_star', (5, 5), reward=star_credit, pickable=True)
-	env.add_object('yellow_star', (4, 6), reward=star_credit, pickable=True)
-	env.add_object('red_ball', (5, 6), value=0, terminal=True)
 
+	def layout0(env):
+		star_credit = 1
+		env.add_object('yellow_star', (3, 3), reward=star_credit, pickable=True)
+		env.add_object('yellow_star', (7, 1), reward=star_credit, pickable=True)
+		env.add_object('yellow_star', (0, 7), reward=star_credit, pickable=True)
+		env.add_object('yellow_star', (5, 7), reward=star_credit, pickable=True)
+		env.add_object('yellow_star', (6, 6), reward=star_credit, pickable=True)
+		env.add_object('yellow_star', (5, 5), reward=star_credit, pickable=True)
+		env.add_object('yellow_star', (4, 6), reward=star_credit, pickable=True)
+		env.add_object('red_ball', (5, 6), value=0, terminal=True).label = "Exit"
 
-	# test for TD learning algorithms
+	def layout1(env):
+		env.add_object('yellow_star', (3, 3), reward=100, pickable=True).label = "(100)"
+		env.add_object('yellow_star', (0, 7), reward=1000, pickable=True).label = "(1000)"
+		env.add_object('red_ball', (5, 6), value=0, terminal=True).label = "Exit"
+		
+	def layout2(env):
+		env.agent.born_at = (3, 3)
+		env.add_object('yellow_star', (0, 0), reward=100, pickable=True).label = "(100)"
+		env.add_object('yellow_star', (0, 7), reward=100, pickable=True).label = "(100)"
+		env.add_object('yellow_star', (7, 0), reward=100, pickable=True).label = "(100)"
+		env.add_object('yellow_star', (7, 7), reward=100, pickable=True).label = "(100)"
+		env.add_object('red_ball', (3, 4), value=0, terminal=True).label = "Exit"
+		
+	def layout3(env):
+		env.agent.born_at = (0, 0)
+		env.agent.credit = 100
+		env.add_object('red_ball', (3, 4), value=0, terminal=True).label = "Exit"
+
+	def layout4(env):
+		env.agent.born_at = (7, 0)
+		env.add_object('yellow_star', (0, 0), reward=100, pickable=True).label = "(100)"
+		env.add_object('yellow_star', (1, 1), reward=100, pickable=True).label = "(100)"
+		env.add_object('yellow_star', (2, 2), reward=100, pickable=True).label = "(100)"
+		env.add_object('yellow_star', (3, 3), reward=100, pickable=True).label = "(100)"
+		env.add_object('yellow_star', (4, 4), reward=100, pickable=True).label = "(100)"
+		env.add_object('yellow_star', (5, 5), reward=100, pickable=True).label = "(100)"
+		env.add_object('yellow_star', (6, 6), reward=100, pickable=True).label = "(100)"
+		env.add_object('yellow_star', (7, 7), reward=100, pickable=True).label = "(100)"
+		env.add_object('red_ball', (0, 7), value=0, terminal=True).label = "Exit"
+		
+	def layout5(env):
+		env.agent.born_at = (5, 0)
+		env.add_object('yellow_star', (0, 0), pickable=True)
+		env.add_object('yellow_star', (7, 7), pickable=True)
+		env.add_object('red_ball', (4, 3), terminal=True).label = "Exit"
+		
+	# use a layout
+	layout4(env)
+
 	# hyperparameters
 	alpha = 0.1
-	gamma = 0.99
-	epsilon = 0.5
+	gamma = 0.9
+	epsilon = 0.7
 	lambda_ = 0.7
-	n_episodes = 20000
+	n_episodes = 10000
 
 	rl_algorithm = QLearning(alpha, gamma, epsilon)
 	#rl_algorithm = Sarsa(alpha, gamma, lambda_, epsilon)
@@ -485,6 +596,9 @@ if __name__ == '__main__':
 	env.show = True
 
 	#env.show_access_counters()
+
+	# wk_debug
+	print("pickup all:", env.agent.pickup_all)
 
 	print("agent is now walking ...")
 	env.test(rl_algorithm)

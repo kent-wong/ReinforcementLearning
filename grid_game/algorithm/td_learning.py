@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 
 from td import TD
 from alg_plugin import AlgPlugin
@@ -16,7 +17,11 @@ class TDLearning(AlgPlugin):
 		self.next_action_considered = next_action_considered
 
 		# use 'epsilon greedy' to chose action while agent is in a state
-		self.action_selection = common.epsilon_greedy
+		#self.action_selection = common.epsilon_greedy
+
+		# __experiment
+		self.action_selection = common.explore
+		self.steps = 0
 
 		# use TD class to do the actual algorithm
 		self.td = TD(alpha, gamma, eligibility, self.value_callback, self.update_callback)
@@ -30,6 +35,32 @@ class TDLearning(AlgPlugin):
 		# as long as the environment has finite number of states
 		self.qtable = {}  
 
+		# delayed learning
+		self.qtable_future = None
+		self._delayed_learning = False
+
+	@property
+	def delayed_learning(self):
+		return self._delayed_learning
+
+	@delayed_learning.setter
+	def delayed_learning(self, onoff):
+		assert onoff == True or onoff == False
+
+		if onoff != self._delayed_learning:
+			if onoff == True:
+				self.qtable_future = copy.deepcopy(self.qtable)
+			else:
+				assert self.qtable_future != None
+				self.qtable = self.qtable_future
+				self.qtable_future = None
+
+			self._delayed_learning = onoff
+
+	def delayed_learning_catchup(self):
+		if self._delayed_learning == True:
+			self.qtable = copy.deepcopy(self.qtable_future)
+
 	def value_callback(self, state, action):
 		"""TD algorithm call this function to query action-value of a state"""
 
@@ -38,13 +69,29 @@ class TDLearning(AlgPlugin):
 		if action == None:
 			return np.max(self.qtable[state])
 		else:
-			return self.qtable[state][action]
+			if self.delayed_learning:
+				if self.qtable_future.get(state) == None:
+					self.qtable_future[state] = [np.float32(0)] * self.action_space.n_actions
+				return self.qtable_future[state][action]
+			else:
+				return self.qtable[state][action]
 
 	def update_callback(self, state, action, delta):
 		"""TD algorithm call this function to update action-value of a state"""
 
-		#print("update_callback(): state: {}, action: {}, delta: {}".format(state, action, delta))
-		self.qtable[state][action] += delta
+		# wk_debug
+		if delta != 0:
+			#if delta < 0.0000000000000001 and delta > -0.000000000000001:
+				#print("update_callback(): state: {}, action: {}, delta: {:.24f}".format(state, action, delta))
+			if delta > 10000000000 or delta < -100000000000:
+				print("update_callback(): state: {}, action: {}, delta: {:.24f}".format(state, action, delta))
+
+		if self.delayed_learning:
+			if self.qtable_future.get(state) == None:
+				self.qtable_future[state] = [np.float32(0)] * self.action_space.n_actions
+			self.qtable_future[state][action] += np.float32(delta)
+		else:
+			self.qtable[state][action] += np.float32(delta)
 
 	##############################################################
 	#                                                            #
@@ -52,26 +99,31 @@ class TDLearning(AlgPlugin):
 	#                                                            #
 	##############################################################
 	def layout(self, n_features, action_space, preset_states_list):
+		# __experiment
+		self.steps = 0
+
 		self.n_features = n_features
 		self.action_space = action_space
 		self.qtable = {}
+		self.qtable_future = None
+		self._delayed_learning = False
 
 		for (state, value, is_terminal) in preset_states_list:
-			self.qtable[state] = [value] * self.action_space.n_actions
+			self.qtable[state] = [np.float32(value)] * self.action_space.n_actions
 
 	def episode_start(self, episode, state):
 		#super().episode_start(episode, state)
 		if self.qtable.get(state) == None:
-			self.qtable[state] = [0] * self.action_space.n_actions
+			self.qtable[state] = [np.float32(0)] * self.action_space.n_actions
 		self.td.episode_start(state)
 		return self.next_action(state)
 
 	def one_step(self, state, action, reward, state_next):
 		if self.qtable.get(state) == None:
-			self.qtable[state] = [0] * self.action_space.n_actions
+			self.qtable[state] = [np.float32(0)] * self.action_space.n_actions
 
 		if self.qtable.get(state_next) == None:
-			self.qtable[state_next] = [0] * self.action_space.n_actions
+			self.qtable[state_next] = [np.float32(0)] * self.action_space.n_actions
 
 		next_action_index = self._next_action_index(state_next)
 		if self.next_action_considered == True:
@@ -87,10 +139,17 @@ class TDLearning(AlgPlugin):
 		return self.action_space.action_at(next_action_index)
 
 	def episode_end(self):
+		# __experiment
+		self.steps += 1
+
 		self.td.episode_end()
 
 	def _next_action_index(self, state):
-		return self.action_selection(self.epsilon, self.qtable[state])
+		# __experiment
+		action_index = self.action_selection(self.steps, self.qtable[state])
+		#print("next action index:", action_index)
+		return action_index
+		#return self.action_selection(self.epsilon, self.qtable[state])
 
 	def next_action(self, state):
 		"""Given the current state, based on selection algorithm select next action for agent"""
@@ -122,4 +181,7 @@ class TDLearning(AlgPlugin):
 if __name__ == '__main__':
 	state_action = [2, 4, 6, 8]
 	a = common.epsilon_greedy(0.8, state_action)
+	print(a)
+
+	a = common.explore(10000, state_action)
 	print(a)

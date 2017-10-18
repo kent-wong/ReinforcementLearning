@@ -29,13 +29,14 @@ def epsilon_greedy(epsilon, action_values):
 	return np.random.choice(indexes)
 
 def explore(steps, action_values):
-	explore_start = 1.0
-	explore_stop = 0.4
-	decay_rate = 0.00001
+	explore_start = 0.9
+	explore_stop = 0.1
+	decay_rate = 0.0001
 
 	explore_rate = explore_stop + (explore_start - explore_stop)*np.exp(-decay_rate*steps)
 
 	# wk_debug
+	#print("explore_rate:", explore_rate)
 	#if steps % 1000 == 0:
 		#print("step: {}, explore_rate: {}".format(steps, explore_rate))
 
@@ -43,5 +44,5 @@ def explore(steps, action_values):
 
 
 if __name__ == "__main__":
-	a = explore(100000, [1, 2, 3, 4])
+	a = explore(0, [1, 2, 3, 4])
 	print(a)
